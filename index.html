@@ -7475,7 +7475,8 @@ function lpShowMapping(){
 
   var existing=_lpMap||{};
   var rowsHtml='';
-  rawList.forEach(function(raw){
+  // Use index-based IDs to avoid data-raw encoding issues
+  rawList.forEach(function(raw,i){
     var current=existing[raw]||bestMatch(raw);
     var opts='<option value="">-- no match --</option>';
     atlasNames.forEach(function(a){
@@ -7483,13 +7484,14 @@ function lpShowMapping(){
     });
     rowsHtml+='<tr style="border-bottom:0.5px solid var(--b1)">';
     rowsHtml+='<td style="padding:8px 0;font-size:12px;color:var(--tx);width:55%">'+esc(raw)+'</td>';
-    rowsHtml+='<td style="padding:4px 8px;width:45%"><select data-raw="'+esc(raw)+'" style="width:100%;padding:5px 8px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--su);color:var(--tx);font-size:12px;outline:none">'+opts+'</select></td>';
+    rowsHtml+='<td style="padding:4px 8px;width:45%"><select id="lp-map-sel-'+i+'" style="width:100%;padding:5px 8px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--su);color:var(--tx);font-size:12px;outline:none">'+opts+'</select></td>';
     rowsHtml+='</tr>';
   });
 
   var ex=document.getElementById('lp-map-modal');if(ex)ex.remove();
   var modal=document.createElement('div');
   modal.id='lp-map-modal';
+  modal.dataset.rawlist=JSON.stringify(rawList);
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
   modal.innerHTML=''
     +'<div style="background:var(--bg);border-radius:var(--rl);padding:20px;width:620px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;gap:12px">'
@@ -7516,17 +7518,22 @@ function lpShowMapping(){
 }
 
 function lpSaveMapping(){
+  var count=0;
+  // Use the rawList stored on the modal element
   var modal=document.getElementById('lp-map-modal');
   if(!modal)return;
-  modal.querySelectorAll('select[data-raw]').forEach(function(sel){
-    var raw=sel.dataset.raw;
+  var rawList=JSON.parse(modal.dataset.rawlist||'[]');
+  rawList.forEach(function(raw,i){
+    var sel=document.getElementById('lp-map-sel-'+i);
+    if(!sel)return;
     var mapped=sel.value;
-    if(raw&&mapped)_lpMap[raw]=mapped;
-    // if no match selected, leave existing mapping intact (don't delete)
+    if(raw&&mapped){_lpMap[raw]=mapped;count++;}
   });
+  console.log('[LP map] saving',count,'mappings:',JSON.stringify(_lpMap));
   saveLPMap();
   supaFetch('POST','lp_map','on_conflict=id',{id:'south_theatres',mapping:JSON.stringify(_lpMap),updated:todayStr()},function(err){
-    if(err)console.warn('LP map save failed:',err.message);
+    if(err)console.warn('[LP map] Supabase save failed:',err.message);
+    else console.log('[LP map] Supabase save OK');
   });
   modal.remove();
   rLP();
@@ -11351,7 +11358,11 @@ function saveLPMap(){
     console.log('[LP map] saved',Object.keys(_lpMap).length,'mappings',_lpMap);
   }catch(e){}
 }
-function lpGetTrust(raw){loadLPMap();return _lpMap[raw]||raw||'';}
+function lpGetTrust(raw){
+  loadLPMap();
+  var mapped=_lpMap[raw];
+  return mapped||raw||'';
+}
 
 // \u2500\u2500 SB TRUST MAPPING (same pattern as Div Con) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 var _sbMap={};
