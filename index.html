@@ -7522,7 +7522,7 @@ function lpSaveMapping(){
     var raw=sel.dataset.raw;
     var mapped=sel.value;
     if(raw&&mapped)_lpMap[raw]=mapped;
-    else if(raw&&!mapped)delete _lpMap[raw];
+    // if no match selected, leave existing mapping intact (don't delete)
   });
   saveLPMap();
   supaFetch('POST','lp_map','on_conflict=id',{id:'south_theatres',mapping:JSON.stringify(_lpMap),updated:todayStr()},function(err){
@@ -11346,7 +11346,10 @@ function loadLPMap(){
   });
 }
 function saveLPMap(){
-  try{localStorage.setItem('lp_map',JSON.stringify(_lpMap));}catch(e){}
+  try{
+    localStorage.setItem('lp_map',JSON.stringify(_lpMap));
+    console.log('[LP map] saved',Object.keys(_lpMap).length,'mappings',_lpMap);
+  }catch(e){}
 }
 function lpGetTrust(raw){loadLPMap();return _lpMap[raw]||raw||'';}
 
