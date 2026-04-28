@@ -9397,7 +9397,7 @@ var _pqLoaded=false;
 var _pqFilter={status:'open',actionFor:'',agent:'',q:''};
 
 function loadPQ(callback){
-  supaFetch('GET','pay_queries','select=id,candidate,shift_date,client,problem,resolution,latest_update,next_action_for,status,agent,created_date&order=created_date.desc',null,function(err,rows){
+  supaFetch('GET','pay_queries_crm','select=id,candidate,shift_date,client,problem,resolution,latest_update,next_action_for,status,agent,created_date&order=created_date.desc',null,function(err,rows){
     if(err||!rows){
       try{var d=localStorage.getItem('dw_pq');if(d)_pq=JSON.parse(d);}catch(e){}
       if(callback)callback();return;
@@ -9423,14 +9423,14 @@ function savePQEntry(q,callback){
     latest_update:q.latestUpdate||'',next_action_for:q.nextActionFor||'',
     status:q.status||'open',agent:q.agent||'',created_date:q.created||todayStr()
   };
-  supaFetch('POST','pay_queries','on_conflict=id',body,function(err){
+  supaFetch('POST','pay_queries_crm','on_conflict=id',body,function(err){
     if(err)console.warn('PQ save failed:',err.message);
     if(callback)callback(err);
   });
 }
 
 function deletePQEntry(qid,callback){
-  supaFetch('DELETE','pay_queries','id=eq.'+encodeURIComponent(qid),null,function(err){
+  supaFetch('DELETE','pay_queries_crm','id=eq.'+encodeURIComponent(qid),null,function(err){
     if(err)console.warn('PQ delete failed:',err.message);
     if(callback)callback(err);
   });
