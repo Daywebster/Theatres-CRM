@@ -1634,7 +1634,10 @@ function rDash(){
   var _el1=document.getElementById('dv-activecands');if(_el1)_el1.textContent=_activeC;
   var _el2=document.getElementById('dv-allcands');if(_el2)_el2.textContent=_allC+' total';
   // Open queries from pay queries
-  if(!_pqLoaded){loadPQ();_pqLoaded=true;}
+  if(!_pqLoaded){
+    _pqLoaded=true;
+    loadPQ(function(){rDash();});
+  }
   var _openQ=_pq.filter(function(q){return q.status==='open';}).length;
   var _inprogQ=_pq.filter(function(q){return q.status==='inprogress';}).length;
   var _el3=document.getElementById('dv-openq');if(_el3)_el3.textContent=_openQ+_inprogQ;
@@ -5444,8 +5447,56 @@ document.addEventListener('click',function(e){
 
 var TS_BASE=[]
 var tsEdits=[];
-try{var _ts=localStorage.getItem('ts_edits');if(_ts)tsEdits=JSON.parse(_ts);}catch(e){}
+var _tsLoaded=false;
+
+function loadTSFromSupabase(callback){
+  supaFetch('GET','timesheets_crm','select=id,submitted_date,shift_count,candidate,shift_dates,trust,day_of_week&order=submitted_date.desc',null,function(err,rows){
+    if(err||!rows){
+      try{var d=localStorage.getItem('ts_edits');if(d)tsEdits=JSON.parse(d);}catch(e){}
+      if(callback)callback();return;
+    }
+    tsEdits=rows.map(function(r){
+      var entry=[r.submitted_date||'',r.shift_count||0,r.candidate||'',r.shift_dates||'',r.trust||'',r.day_of_week||''];
+      entry._id=r.id;
+      return entry;
+    });
+    try{localStorage.setItem('ts_edits',JSON.stringify(tsEdits));}catch(e){}
+    console.log('Loaded '+tsEdits.length+' timesheets from Supabase');
+    if(callback)callback();
+  });
+}
+
 function saveTS(){try{localStorage.setItem('ts_edits',JSON.stringify(tsEdits));}catch(e){}}
+
+function saveTSEntry(entry,callback){
+  var body={
+    submitted_date:entry[0]||null,shift_count:entry[1]||0,
+    candidate:entry[2]||'',shift_dates:entry[3]||'',
+    trust:entry[4]||'',day_of_week:entry[5]||''
+  };
+  if(entry._id){
+    body.id=entry._id;
+    supaFetch('POST','timesheets_crm','on_conflict=id',body,function(err){
+      if(err)console.warn('TS save failed:',err.message);
+      if(callback)callback(err);
+    });
+  } else {
+    supaFetch('POST','timesheets_crm',null,body,function(err,rows){
+      if(err)console.warn('TS insert failed:',err.message);
+      var row=Array.isArray(rows)?rows[0]:rows;
+      if(row&&row.id)entry._id=row.id;
+      if(callback)callback(err);
+    });
+  }
+}
+
+function deleteTSEntry(entryId,callback){
+  supaFetch('DELETE','timesheets_crm','id=eq.'+encodeURIComponent(entryId),null,function(err){
+    if(err)console.warn('TS delete failed:',err.message);
+    if(callback)callback(err);
+  });
+}
+
 function getAllTS(){return TS_BASE.concat(tsEdits);}
 
 var tsFilter={trust:'',day:'',q:''};
@@ -5656,8 +5707,10 @@ function addTimesheet(){
   if(!cand){alert('Please select a candidate first');return;}
   if(!sub){alert('Please set the session date at the top');return;}
   if(!shifts||!dates){alert('Please pick at least one shift date');return;}
-  tsEdits.push([sub,shifts,cand,dates,trust,day]);
+  var _newTS=[sub,shifts,cand,dates,trust,day];
+  tsEdits.push(_newTS);
   saveTS();
+  saveTSEntry(_newTS,null);
   // Clear entry fields but keep session + candidate for fast repeat entry
   document.getElementById('ts-shifts').value='';
   document.getElementById('ts-dates').value='';
@@ -5679,12 +5732,22 @@ function addTimesheet(){
 function deleteTS(idx){
   // idx into tsEdits (not TS_BASE)
   if(!confirm('Delete this timesheet entry?'))return;
+  var entry=tsEdits[idx];
   tsEdits.splice(idx,1);
   saveTS();
+  if(entry&&entry._id)deleteTSEntry(entry._id,null);
   rTS();
 }
 
 function rTS(){
+  if(!_tsLoaded){
+    _tsLoaded=true;
+    loadTSFromSupabase(function(){_rTSRender();});
+    return;
+  }
+  _rTSRender();
+}
+function _rTSRender(){
   var all=getAllTS();
   var q=(tsFilter.q||'').toLowerCase();
   var tf=(tsFilter.trust||'').toLowerCase();
@@ -6480,8 +6543,57 @@ function rRC(){
 // \u2500\u2500 SELF BILL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 var SB_BASE=[]
 var sbEdits=[];
-try{var _sb=localStorage.getItem('sb_edits');if(_sb)sbEdits=JSON.parse(_sb);}catch(e){}
+var _sbLoaded=false;
+
+function loadSBFromSupabase(callback){
+  supaFetch('GET','selfbill_crm','select=id,sb_date,candidate,shift_date,ref_number,sb_amount,hospital,expected_amount,status&order=sb_date.desc',null,function(err,rows){
+    if(err||!rows){
+      try{var d=localStorage.getItem('sb_edits');if(d)sbEdits=JSON.parse(d);}catch(e){}
+      if(callback)callback();return;
+    }
+    sbEdits=rows.map(function(r){
+      var entry=[r.sb_date||'',r.candidate||'',r.shift_date||'',r.ref_number||'',
+        parseFloat(r.sb_amount)||0,r.hospital||'',parseFloat(r.expected_amount)||0,r.status||'unreconciled'];
+      entry._id=r.id;
+      return entry;
+    });
+    try{localStorage.setItem('sb_edits',JSON.stringify(sbEdits));}catch(e){}
+    console.log('Loaded '+sbEdits.length+' self bill entries from Supabase');
+    if(callback)callback();
+  });
+}
+
 function saveSB(){try{localStorage.setItem('sb_edits',JSON.stringify(sbEdits));}catch(e){}}
+
+function saveSBEntry(entry,callback){
+  var body={
+    sb_date:entry[0]||null,candidate:entry[1]||'',shift_date:entry[2]||null,
+    ref_number:entry[3]||'',sb_amount:entry[4]||0,hospital:entry[5]||'',
+    expected_amount:entry[6]||0,status:entry[7]||'unreconciled'
+  };
+  if(entry._id){
+    body.id=entry._id;
+    supaFetch('POST','selfbill_crm','on_conflict=id',body,function(err){
+      if(err)console.warn('SB save failed:',err.message);
+      if(callback)callback(err);
+    });
+  } else {
+    supaFetch('POST','selfbill_crm',null,body,function(err,rows){
+      if(err)console.warn('SB insert failed:',err.message);
+      var row=Array.isArray(rows)?rows[0]:rows;
+      if(row&&row.id)entry._id=row.id;
+      if(callback)callback(err);
+    });
+  }
+}
+
+function deleteSBEntry(entryId,callback){
+  supaFetch('DELETE','selfbill_crm','id=eq.'+encodeURIComponent(entryId),null,function(err){
+    if(err)console.warn('SB delete failed:',err.message);
+    if(callback)callback(err);
+  });
+}
+
 function getAllSB(){return SB_BASE.concat(sbEdits);}
 
 var sbFilter={hospital:'',status:'',q:''};
@@ -6699,10 +6811,13 @@ function sbSelectAll(val){
 function sbConfirmBulk(){
   var toLog=_sbParsed.filter(function(r){return r.selected;});
   if(!toLog.length){alert('No rows selected');return;}
+  var _bulkNew=[];
   toLog.forEach(function(r){
-    sbEdits.push([r.sbDate,r.cand,r.shiftDate,r.ref,r.amount,r.hospital,0,'unreconciled']);
+    var e=[r.sbDate,r.cand,r.shiftDate,r.ref,r.amount,r.hospital,0,'unreconciled'];
+    sbEdits.push(e);_bulkNew.push(e);
   });
   saveSB();
+  _bulkNew.forEach(function(e){saveSBEntry(e,null);});
   _sbParsed=[];
   document.getElementById('sb-preview-area').style.display='none';
   sbPage=0;
@@ -6957,11 +7072,14 @@ function sbConfirmImport(){
   var toLog=_sbImportParsed.filter(function(r){return r.selected;});
   if(!toLog.length){alert('No rows selected');return;}
   var today=todayStr();
+  var _importNew=[];
   toLog.forEach(function(r){
     var cand=r.candOverride||r.name||r.nameRaw;
-    sbEdits.push([today,cand,r.shiftDate,r.ref,r.amount,r.hospital,0,'unreconciled']);
+    var e=[today,cand,r.shiftDate,r.ref,r.amount,r.hospital,0,'unreconciled'];
+    sbEdits.push(e);_importNew.push(e);
   });
   saveSB();
+  _importNew.forEach(function(e){saveSBEntry(e,null);});
   _sbImportParsed=[];
   var prev=document.getElementById('sb-import-preview');
   if(prev)prev.style.display='none';
@@ -6990,8 +7108,10 @@ function addSelfBill(){
   var expAmt=parseFloat(document.getElementById('sb-expected').value)||0;
   if(!cand){alert('Candidate name is required');return;}
   if(!sbDate){alert('SB date is required');return;}
-  sbEdits.push([sbDate,cand,shiftDate,ref,sbAmt,hosp,expAmt,'unreconciled']);
+  var _manualSB=[sbDate,cand,shiftDate,ref,sbAmt,hosp,expAmt,'unreconciled'];
+  sbEdits.push(_manualSB);
   saveSB();
+  saveSBEntry(_manualSB,null);
   // Clear form except hospital (batch entry)
   document.getElementById('sb-cand').value='';
   document.getElementById('sb-shiftdate').value='';
@@ -7005,18 +7125,31 @@ function addSelfBill(){
 function updateSBStatus(editIdx, status){
   if(editIdx<0||editIdx>=sbEdits.length)return;
   sbEdits[editIdx][7]=status;
-  saveSB(); rSB();
+  saveSB();
+  saveSBEntry(sbEdits[editIdx],null);
+  rSB();
 }
 
 function deleteSB(editIdx){
   if(!confirm('Delete this entry?'))return;
+  var entry=sbEdits[editIdx];
   sbEdits.splice(editIdx,1);
-  saveSB(); rSB();
+  saveSB();
+  if(entry&&entry._id)deleteSBEntry(entry._id,null);
+  rSB();
 }
 
 function sbSetFilter(k,v){sbFilter[k]=v;sbPage=0;rSB();}
 
 function rSB(){
+  if(!_sbLoaded){
+    _sbLoaded=true;
+    loadSBFromSupabase(function(){_rSBRender();});
+    return;
+  }
+  _rSBRender();
+}
+function _rSBRender(){
   var all=getAllSB();
   var q=(sbFilter.q||'').toLowerCase();
   var hf=(sbFilter.hospital||'').toLowerCase();
@@ -9263,8 +9396,45 @@ var _pq=[];
 var _pqLoaded=false;
 var _pqFilter={status:'open',actionFor:'',agent:'',q:''};
 
-function loadPQ(){try{var d=localStorage.getItem('dw_pq');if(d)_pq=JSON.parse(d);}catch(e){}}
+function loadPQ(callback){
+  supaFetch('GET','pay_queries','select=id,candidate,shift_date,client,problem,resolution,latest_update,next_action_for,status,agent,created_date&order=created_date.desc',null,function(err,rows){
+    if(err||!rows){
+      try{var d=localStorage.getItem('dw_pq');if(d)_pq=JSON.parse(d);}catch(e){}
+      if(callback)callback();return;
+    }
+    _pq=rows.map(function(r){
+      return{id:r.id,cand:r.candidate||'',shiftDate:r.shift_date||'',
+        client:r.client||'',problem:r.problem||'',resolution:r.resolution||'',
+        latestUpdate:r.latest_update||'',nextActionFor:r.next_action_for||'',
+        status:r.status||'open',agent:r.agent||'',created:r.created_date||''};
+    });
+    try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}
+    console.log('Loaded '+_pq.length+' pay queries from Supabase');
+    if(callback)callback();
+  });
+}
+
 function savePQ(){try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}}
+
+function savePQEntry(q,callback){
+  var body={
+    id:q.id,candidate:q.cand||'',shift_date:q.shiftDate||null,
+    client:q.client||'',problem:q.problem||'',resolution:q.resolution||'',
+    latest_update:q.latestUpdate||'',next_action_for:q.nextActionFor||'',
+    status:q.status||'open',agent:q.agent||'',created_date:q.created||todayStr()
+  };
+  supaFetch('POST','pay_queries','on_conflict=id',body,function(err){
+    if(err)console.warn('PQ save failed:',err.message);
+    if(callback)callback(err);
+  });
+}
+
+function deletePQEntry(qid,callback){
+  supaFetch('DELETE','pay_queries','id=eq.'+encodeURIComponent(qid),null,function(err){
+    if(err)console.warn('PQ delete failed:',err.message);
+    if(callback)callback(err);
+  });
+}
 
 var _pqAgents=['Rachel','Josh','Jason','Other'];
 var _pqActionFor=['Consultant','Client','Payroll','Sales Support','Candidate','Self-bill','Compliance'];
@@ -9274,7 +9444,16 @@ var _pqStatusBg={open:'var(--ambg)',inprogress:'var(--blbg)',completed:'var(--gr
 
   // Filter queries
 function rPQ(){
-  if(!_pqLoaded){loadPQ();_pqLoaded=true;}
+  var el=document.getElementById('pq-main');
+  if(!_pqLoaded){
+    _pqLoaded=true;
+    if(el)el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3)">Loading pay queries…</div>';
+    loadPQ(function(){_rPQRender();});
+    return;
+  }
+  _rPQRender();
+}
+function _rPQRender(){
   var el=document.getElementById('pq-main');
   if(!el)return;
 
@@ -9790,15 +9969,17 @@ function pqAdd(){
   var agent=(document.getElementById('pq-agent')||{}).value||'';
   if(!cand){alert('Candidate is required');return;}
   if(!problem){alert('Problem description is required');return;}
-  _pq.unshift({
+  var _newPQ={
     id:'pq'+Date.now(),
     cand:cand,shiftDate:date,client:client,
     problem:problem,resolution:resolution,
     latestUpdate:'',nextActionFor:actionFor,
     status:'open',agent:agent,
     created:todayStr()
-  });
+  };
+  _pq.unshift(_newPQ);
   savePQ();
+  savePQEntry(_newPQ,null);
   _pqFilter.status='open';
   pqResetDateChips();
   pqShowAdd();
@@ -9810,7 +9991,7 @@ function pqCycleStatus(id){
   if(!q)return;
   var cycle={open:'inprogress',inprogress:'completed',completed:'open'};
   q.status=cycle[q.status]||'open';
-  savePQ();rPQ();
+  savePQ();savePQEntry(q,null);rPQ();
 }
 
 function pqUpdateField(id,field,val){
@@ -9818,7 +9999,7 @@ function pqUpdateField(id,field,val){
   if(!q)return;
   q[field]=val;
   savePQ();
-  // Re-render only if status filter changed significantly
+  savePQEntry(q,null);
 }
 
 function pqExpand(id){
@@ -9829,7 +10010,7 @@ function pqExpand(id){
 function pqDelete(id){
   if(!confirm('Remove this pay query?'))return;
   _pq=_pq.filter(function(q){return q.id!==id;});
-  savePQ();rPQ();
+  savePQ();deletePQEntry(id,null);rPQ();
 }
 
 
@@ -12018,8 +12199,10 @@ function tsmSubmit(){
   var dates=_tsmSelDates.join(', ');
   var shifts=_tsmSelDates.length;
 
-  tsEdits.push([sub, shifts, cand, dates, trust, day]);
+  var _newTSM=[sub, shifts, cand, dates, trust, day];
+  tsEdits.push(_newTSM);
   saveTS();
+  saveTSEntry(_newTSM,null);
   document.getElementById('ts-modal').remove();
   rTS();
   populateTSDatalists();
