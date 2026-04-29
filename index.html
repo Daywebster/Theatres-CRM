@@ -3818,7 +3818,7 @@ function rateShowAdd(){
 
     // PAYE breakdown
     +'<div id="ram-paye-wrap" style="display:none;background:var(--su2);border-radius:var(--r);padding:10px 12px;margin-top:8px">'
-      +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown (13.8% employer NI)</div>'
+      +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown — 15% employer NI (2025/26)</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">'
         +'<div style="text-align:center"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Basic rate</div><div id="ram-paye-basic" style="font-size:13px;font-weight:700;color:var(--bl)">\u2014</div><div style="font-size:9px;color:var(--t3)">/hr</div></div>'
         +'<div style="text-align:center"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">PAYE rate (incl. hol)</div><div id="ram-paye-full" style="font-size:13px;font-weight:700;color:var(--bl)">\u2014</div><div style="font-size:9px;color:var(--t3)">/hr</div></div>'
@@ -3942,14 +3942,20 @@ function rateCalcPAYE(){
   // total cost to agency = pay + employerNI
   // margin = charge - totalCost (if charge entered)
 
-  var eniPct=13.8;
+  // 2025/26: 15% employer NI on earnings above £5,000/yr threshold
+  // In rate card modal, pay field = total_gross/hr (basic + holiday already included)
+  // We back-calculate: basic = pay / 1.1207
+  var NI_RATE_RC = 0.15;
+  var NI_THRESH_HR = 5000/52/37.5; // ~£2.564/hr threshold (based on 37.5hr week)
+  var LEVY_RC = 0.005;
   function calcRow(pay, charge){
     if(!pay)return null;
     var basic=Math.round(pay/1.1207*100)/100;
-    var eni=Math.round(pay*(eniPct/100)*100)/100;
-    var totalCost=Math.round((pay+eni)*100)/100;
+    var eni=Math.round(Math.max(0,pay-NI_THRESH_HR)*NI_RATE_RC*100)/100;
+    var lev=Math.round(pay*LEVY_RC*100)/100;
+    var totalCost=Math.round((pay+eni+lev)*100)/100;
     var margin=charge?Math.round((charge-totalCost)*100)/100:null;
-    return{basic:basic,paye:pay,eni:eni,totalCost:totalCost,margin:margin};
+    return{basic:basic,paye:pay,eni:eni,levy:lev,totalCost:totalCost,margin:margin};
   }
 
   var pd=parseFloat((document.getElementById('ram-pd')||{}).value)||0;
@@ -3990,7 +3996,7 @@ function rateCalcPAYE(){
   if(!hasAny){wrap.style.display='none';return;}
 
   // Header
-  var hdr='<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown \u2014 13.8% employer NI'+(cd||cn||cs?' (margin shown where charge entered)':'')+'</div>';
+  var hdr='<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown \u2014 15% employer NI (2025/26)'+(cd||cn||cs?' \u2014 margin shown where charge entered':'')+'</div>';
 
   wrap.innerHTML=hdr+rows;
 }
@@ -4031,15 +4037,28 @@ function rRates(){
     var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return p[2].replace(/^0/,'')+' '+months[+p[1]-1]+' '+p[0];
   }
-  function payeCalc(pay){
+  function payeCalc(pay,hours){
+    // pay = basic hourly rate, hours = hrs/week (default 37.5)
+    // 2025/26: correct on-costs calculated from basic upward
     var p=parseFloat(pay)||0;
-    var wtr=parseFloat((p*0.1207).toFixed(2));
-    var payeHol=parseFloat((p+wtr).toFixed(2));
-    var erNi=parseFloat((p*0.138).toFixed(2));
-    var apLev=parseFloat((p*0.005).toFixed(2));
-    var pension=parseFloat((p*0.03).toFixed(2));
-    var total=parseFloat((payeHol+erNi+apLev+pension).toFixed(2));
-    return{basic:p,wtr:wtr,payeHol:payeHol,erNi:erNi,apLev:apLev,pension:pension,total:total};
+    var h=hours||37.5;
+    var HOL=0.1207, NI_RATE=0.15, P=0.03, LEVY=0.005;
+    var NI_THRESH_WK=5000/52, PENSION_LO_WK=6240/52;
+    var wtr=p*HOL;
+    var payeHol=p+wtr;
+    var pension_hr=P*Math.max(0,payeHol-PENSION_LO_WK/h);
+    var erNi_hr=NI_RATE*Math.max(0,payeHol-pension_hr-NI_THRESH_WK/h);
+    var apLev_hr=LEVY*payeHol;
+    var total_hr=payeHol+erNi_hr+pension_hr+apLev_hr;
+    return{
+      basic:p,
+      wtr:parseFloat(wtr.toFixed(2)),
+      payeHol:parseFloat(payeHol.toFixed(2)),
+      erNi:parseFloat(erNi_hr.toFixed(2)),
+      apLev:parseFloat(apLev_hr.toFixed(2)),
+      pension:parseFloat(pension_hr.toFixed(2)),
+      total:parseFloat(total_hr.toFixed(2))
+    };
   }
   var hdrs=['Trust','Hospital','Ward/grade','Pay D','Pay N','Pay S','Charge D','Charge N','Charge S','Margin D',''];
   var tbl='<table style="border-collapse:collapse;width:100%;min-width:720px"><thead><tr style="border-bottom:0.5px solid var(--b2)">'
@@ -4064,7 +4083,7 @@ function rRates(){
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Basic rate</span><span>\u00a3'+paye.basic.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Holiday pay (12.07%)</span><span>\u00a3'+paye.wtr.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">PAYE incl. hol</span><span>\u00a3'+paye.payeHol.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Employer NI (13.8%)</span><span>\u00a3'+paye.erNi.toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Employer NI (15%)</span><span>\u00a3'+paye.erNi.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Ap. levy (0.5%)</span><span>\u00a3'+paye.apLev.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Pension (3%)</span><span>\u00a3'+paye.pension.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;font-weight:600"><span>Total cost</span><span>\u00a3'+paye.total.toFixed(2)+'</span></div>'
@@ -8689,7 +8708,7 @@ function _rTodoRender(){
   if(histTasks.length){
     html+='<details style="margin-top:18px">'
       +'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 0;border-top:0.5px solid var(--b1)">'
-        +'<span style="font-size:12px;font-weight:600;color:var(--t2)">📋 History</span>'
+        +'<span style="font-size:12px;font-weight:600;color:var(--t2)">&#128203; History</span>'
         +'<span style="font-size:11px;color:var(--t3)">'+histTasks.length+' completed in last 30 days</span>'
       +'</summary>'
       +'<div style="margin-top:10px">';
@@ -11035,7 +11054,7 @@ function rPayCalc(){
     // Page header
     +'<div style="margin-bottom:12px">'
       +'<div class="sh">PAYE Calculator</div>'
-      +'<div style="font-size:12px;color:var(--t3);margin-top:3px">Calculates pay rate, employer on-costs and estimated employee take-home based on 2024/25 thresholds</div>'
+      +'<div style="font-size:12px;color:var(--t3);margin-top:3px">2025/26 thresholds — 15% employer NI, £5,000 secondary threshold, 12.07% holiday pay rolled up. Closed-form algebraic solution (no iteration).</div>'
     +'</div>'
 
     // Inputs card
@@ -11071,7 +11090,7 @@ function rPayCalc(){
         +'<div>'
           +'<div style="font-size:11px;color:var(--t2);font-weight:500;margin-bottom:5px">Employer NI</div>'
           +'<div style="display:flex;align-items:center;border:0.5px solid var(--b2);border-radius:var(--r);overflow:hidden;background:var(--su)">'
-            +'<input id="pc-eni" type="number" min="0" max="30" step="0.1" value="13.8" oninput="pcCalc()" style="flex:1;padding:8px 10px;border:none;background:var(--su);color:var(--tx);font-size:13px;outline:none;width:0">'
+            +'<input id="pc-eni" type="number" min="0" max="30" step="0.1" value="15" oninput="pcCalc()" style="flex:1;padding:8px 10px;border:none;background:var(--su);color:var(--tx);font-size:13px;outline:none;width:0">'
             +'<span style="padding:8px 10px;background:var(--su2);color:var(--t2);font-size:13px;border-left:0.5px solid var(--b2)">%</span>'
           +'</div>'
         +'</div>'
@@ -11134,39 +11153,52 @@ function pcCalc(){
   var el=document.getElementById('pc-results');
   if(!el||!charge)return;
 
-  // \u2500\u2500 Core calculation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  // Revenue after margin = charge - margin
-  var revenueAfterMargin=charge-marginGbp;
-  var employerCostMultiplier=1+(eniPct/100)+(pensionPct/100);
-  var payRateHr=revenueAfterMargin/employerCostMultiplier;
-  var employerNI=payRateHr*(eniPct/100);
-  var employerPension=payRateHr*(pensionPct/100);
-  var totalCost=payRateHr+employerNI+employerPension;
-  var marginActualPct=charge>0?(marginGbp/charge)*100:0;
+  // 2025/26 constants
+  var NI_RATE      = eniPct/100;
+  var NI_THRESH_WK = 5000/52;
+  var P            = pensionOn?(pensionPct/100):0;
+  var PENSION_LO   = 6240/52;
+  var PENSION_HI   = 50270/52;
+  var LEVY         = 0.005;
+  var HOL          = 0.1207;
+
+  // Closed-form solution (algebraic, no iteration needed)
+  var gross = charge - marginGbp;
+  var numerator   = gross + NI_RATE*(NI_THRESH_WK/hours) + P*(PENSION_LO/hours)*(1-NI_RATE);
+  var denominator = (1+HOL) * (1 + NI_RATE*(1-P) + P + LEVY);
+  var basicRateHr = numerator / denominator;
+  var holRateHr   = basicRateHr * HOL;
+  var payRateHr   = basicRateHr + holRateHr;
+
+  // Employer on-costs per hour
+  var employerPension = P>0 ? P*Math.max(0, payRateHr - PENSION_LO/hours) : 0;
+  var employerNI      = NI_RATE * Math.max(0, payRateHr - employerPension - NI_THRESH_WK/hours);
+  var levy            = LEVY * payRateHr;
+  var totalCost       = payRateHr + employerNI + employerPension + levy;
+  var marginActualPct = charge>0?(marginGbp/charge)*100:0;
 
   // Weekly figures
-  var wCharge=charge*hours;
-  var wPay=payRateHr*hours;
-  // payRateHr is the PAYE rate (holiday-inclusive). Split into basic + holiday.
-  // Basic = PAYE rate / 1.1207,  Holiday = PAYE rate - Basic
-  var holRate=0.1207;
-  var basicRateHr=Math.round(payRateHr/1.1207*100)/100;
-  var holRateHr=Math.round((payRateHr-basicRateHr)*100)/100;
-  var basicWk=Math.round(basicRateHr*hours*100)/100;
-  var holWk=Math.round(holRateHr*hours*100)/100;
-  // payeRateHr = payRateHr (no addition - holiday is already inside)
-  var payeRateHr=payRateHr;
-  var payeWk=Math.round(payeRateHr*hours*100)/100;
-  // wPay and grossWk are the same - grossWk defined in employee section below
-  var wMargin=marginGbp*hours;
-  var wENI=employerNI*hours;
-  var wPension=employerPension*hours;
+  var wCharge  = charge*hours;
+  var payeRateHr = payRateHr;
+  var payeWk   = payRateHr*hours;
+  var basicWk  = basicRateHr*hours;
+  var holWk    = holRateHr*hours;
+  var wPay     = payRateHr*hours;
+  var wMargin  = marginGbp*hours;
+  var wENI     = employerNI*hours;
+  var wPension = employerPension*hours;
+  var wLevy    = levy*hours;
+
+  // Validation
+  var NMW = 12.21;
+  var belowNMW  = basicRateHr < NMW;
+  var belowZero = basicRateHr < 0;
 
   // \u2500\u2500 Employee deductions (proper PAYE weekly basis) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   var taxCode=(document.getElementById('pc-taxcode')||{value:'1257L'}).value||'1257L';
   var kAmt=taxCode==='K'?(parseFloat((document.getElementById('pc-kcode')||{value:0}).value)||0):0;
 
-  // 2024/25 annual thresholds -> weekly
+  // 2025/26 employee deduction thresholds (weekly)
   var NI_LOW_WK   = 12570/52;   // \u00a3242.00 - employee NI primary threshold
   var NI_HIGH_WK  = 50270/52;   // \u00a3966.73 - upper earnings limit
   var PA_WK       = 12570/52;   // \u00a3242.00 - personal allowance (1257L)
@@ -11255,11 +11287,16 @@ function pcCalc(){
     +row('Charge rate',charge,wCharge,'var(--tx)')
     +row('Margin ('+fmtPct(marginActualPct)+' of charge)',marginGbp,wMargin,'var(--grtx)')
     +'<div style="height:4px;background:var(--su2)"></div>'
-    +row('Pay rate (gross)',payRateHr,wPay,'var(--bl)')
+    +row('Pay rate (basic + hol)',payRateHr,wPay,'var(--bl)')
+    +row('  └ Basic pay ('+fmtPct(100)+')',basicRateHr,basicWk,'var(--t2)')
+    +row('  └ Holiday pay (12.07%)',holRateHr,holWk,'var(--t2)')
     +row('Employer NI ('+fmtPct(eniPct)+')',employerNI,wENI,'var(--amtx)')
     +(pensionOn?row('Employer pension ('+fmtPct(pensionPct)+')',employerPension,wPension,'var(--amtx)'):'')
+    +row('Apprenticeship levy (0.5%)',levy,wLevy,'var(--amtx)')
+    +(belowNMW&&!belowZero?'<div style="padding:8px 12px;background:#fdf0ee;color:#c0392b;font-size:12px;font-weight:500">&#9888;&#65039; Basic rate £'+basicRateHr.toFixed(2)+'/hr is below NMW (£12.21) — cannot legally pay this rate</div>':'')
+    +(belowZero?'<div style="padding:8px 12px;background:#fdf0ee;color:#c0392b;font-size:12px;font-weight:500">&#9888;&#65039; Margin too high — results in negative pay rate</div>':'')
     +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:9px 12px;background:var(--su2);align-items:center">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--tx)">Total cost</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--tx)">Total cost to agency</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);text-align:right">'+fmt(totalCost)+'</div>'
       +'<div style="font-size:12px;font-weight:600;color:var(--tx);text-align:right">'+fmt(totalCost*hours)+'</div>'
     +'</div>'
@@ -11271,7 +11308,7 @@ function pcCalc(){
     +header()
     +row('Basic pay',basicRateHr,basicWk,'var(--bl)')
     +row('Holiday pay (12.07%)',holRateHr,holWk,'var(--bl)')
-    +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:6px 12px;background:var(--blbg);align-items:center">'      +'<div style="font-size:12px;font-weight:600;color:var(--bltx)">Total PAYE rate (Basic + Hol)</div>'      +'<div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeRateHr)+'</div>'      +'<div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeWk)+'</div>'    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:6px 12px;background:var(--blbg);align-items:center"><div style="font-size:12px;font-weight:600;color:var(--bltx)">Total PAYE rate (Basic + Hol)</div><div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeRateHr)+'</div><div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeWk)+'</div></div>'
     +row('Employee NI (8%/2% banded)',empNIWk/hours,empNIWk,'var(--amtx)')
     +row('Income tax \u2014 '+taxCode,empTaxWk/hours,empTaxWk,'var(--amtx)')
     +(pensionOn?row('Employee pension (5% qualifying)',empPensionWk/hours,empPensionWk,'var(--amtx)'):'')
