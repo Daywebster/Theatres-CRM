@@ -5404,7 +5404,14 @@ function gp(id){
   if(id==='rates')rRates();
   if(id==='timesheets'){rTS();populateTSDatalists();}
   if(id==='payonly'){rPO();populatePODatalists();poInitDrop();}
-  if(id==='rostercheck')rRC();
+  if(id==='rostercheck'){
+    if(!_rcSupaLoaded){
+      _rcSupaLoaded=true;
+      loadRCFromSupabase(function(){rRC();});
+    } else {
+      rRC();
+    }
+  }
   if(id==='documents')rDocs();
   if(id==='pipeline')rPipeline();
   if(id==='cascade'){csInitDrop();}
@@ -5920,8 +5927,62 @@ document.addEventListener('DOMContentLoaded',function(){
 
 var PO_BASE=[];
 var poEdits=[];
-try{var _po=localStorage.getItem('po_edits');if(_po)poEdits=JSON.parse(_po);}catch(e){}
+var _poLoaded=false;
+
+function loadPOFromSupabase(callback){
+  supaFetch('GET','payonly_crm','select=id,candidate,hospital,day_of_week,shift_date,start_time,end_time,break_mins,hours,pay_rate,charge_rate,reason,total_charge,margin,system,req_date,charged_date&order=shift_date.desc',null,function(err,rows){
+    if(err||!rows){
+      try{var d=localStorage.getItem('po_edits');if(d)poEdits=JSON.parse(d);}catch(e){}
+      if(callback)callback();return;
+    }
+    poEdits=rows.map(function(r){
+      var entry=[r.candidate||'',r.hospital||'',r.day_of_week||'',r.shift_date||'',
+        r.start_time||'',r.end_time||'',r.break_mins||0,r.hours||0,
+        r.pay_rate||0,r.charge_rate||0,r.reason||'',r.total_charge||0,
+        r.margin||0,r.system||'',r.req_date||'',r.charged_date||''];
+      entry._id=r.id;
+      return entry;
+    });
+    try{localStorage.setItem('po_edits',JSON.stringify(poEdits));}catch(e){}
+    console.log('Loaded '+poEdits.length+' pay only entries from Supabase');
+    if(callback)callback();
+  });
+}
+
 function savePO(){try{localStorage.setItem('po_edits',JSON.stringify(poEdits));}catch(e){}}
+
+function savePOEntry(entry,callback){
+  var body={
+    candidate:entry[0]||'',hospital:entry[1]||'',day_of_week:entry[2]||'',
+    shift_date:entry[3]||null,start_time:entry[4]||'',end_time:entry[5]||'',
+    break_mins:entry[6]||0,hours:entry[7]||0,pay_rate:entry[8]||0,
+    charge_rate:entry[9]||0,reason:entry[10]||'',total_charge:entry[11]||0,
+    margin:entry[12]||0,system:entry[13]||'',req_date:entry[14]||null,
+    charged_date:entry[15]||null
+  };
+  if(entry._id){
+    body.id=entry._id;
+    supaFetch('POST','payonly_crm','on_conflict=id',body,function(err){
+      if(err)console.warn('PO save failed:',err.message);
+      if(callback)callback(err);
+    });
+  } else {
+    supaFetch('POST','payonly_crm',null,body,function(err,rows){
+      if(err)console.warn('PO insert failed:',err.message);
+      var row=Array.isArray(rows)?rows[0]:rows;
+      if(row&&row.id)entry._id=row.id;
+      if(callback)callback(err);
+    });
+  }
+}
+
+function deletePOEntry(entryId,callback){
+  supaFetch('DELETE','payonly_crm','id=eq.'+encodeURIComponent(entryId),null,function(err){
+    if(err)console.warn('PO delete failed:',err.message);
+    if(callback)callback(err);
+  });
+}
+
 function getAllPO(){return PO_BASE.concat(poEdits);}
 var poFilter={hospital:'',day:'',q:'',charged:'',dateFrom:'',dateTo:''};
 var poPage=0;
@@ -6046,6 +6107,7 @@ function addPayOnly(){
   var newRec=[name,hosp,day,date,start,end,brk,hrs,pay,chg,reason,totalCharge,margin,system,reqdate,''];
   poEdits.push(newRec);
   savePO();
+  savePOEntry(newRec,null);
   // Show email button
   poShowEmailBtn(newRec);
   // Clear entry fields
@@ -6071,8 +6133,11 @@ function addPayOnly(){
 
 function deletePO(idx){
   if(!confirm('Delete this entry?'))return;
+  var entry=poEdits[idx];
   poEdits.splice(idx,1);
-  savePO();rPO();
+  savePO();
+  if(entry&&entry._id)deletePOEntry(entry._id,null);
+  rPO();
 }
 
 function updatePOCharged(editIdx, val){
@@ -6081,6 +6146,7 @@ function updatePOCharged(editIdx, val){
   if(!poEdits[editIdx][15]&&poEdits[editIdx].length<16)poEdits[editIdx].push('');
   poEdits[editIdx][15]=val;
   savePO();
+  savePOEntry(poEdits[editIdx],null);
 }
 
 
@@ -6172,6 +6238,14 @@ function poShowEmailModal(subject,body){
 
 
 function rPO(){
+  if(!_poLoaded){
+    _poLoaded=true;
+    loadPOFromSupabase(function(){_rPORender();});
+    return;
+  }
+  _rPORender();
+}
+function _rPORender(){
   var all=getAllPO();
   var q=(poFilter.q||'').toLowerCase();
   var hf=(poFilter.hospital||'').toLowerCase();
@@ -6312,6 +6386,7 @@ function rPO(){
       if(!isNaN(ei)&&poEdits[ei]){
         poEdits[ei][15]=this.value;
         savePO();
+        savePOEntry(poEdits[ei],null);
       }
     });
   });
@@ -6356,7 +6431,31 @@ var RC_HOSPITALS=[["Barts", "HR", "Health Roster", "https://healthroster.allocat
 // rcChecks: {hospitalName: {wkKey: {checked: bool, time: 'HH:MM', date: 'YYYY-MM-DD'}}}
 var rcChecks={};
 try{var _rc=localStorage.getItem('rc_checks');if(_rc)rcChecks=JSON.parse(_rc);}catch(e){}
-function saveRC(){try{localStorage.setItem('rc_checks',JSON.stringify(rcChecks));}catch(e){}}
+var _rcSupaLoaded=false;
+
+function loadRCFromSupabase(callback){
+  supaFetch('GET','roster_checks','select=checks&id=eq.south_theatres',null,function(err,data){
+    if(err||!data||!data.length){
+      if(callback)callback();return;
+    }
+    try{
+      var checks=data[0].checks;
+      if(checks&&typeof checks==='object'){
+        rcChecks=checks;
+        localStorage.setItem('rc_checks',JSON.stringify(rcChecks));
+      }
+    }catch(e){}
+    console.log('Loaded roster checks from Supabase');
+    if(callback)callback();
+  });
+}
+
+function saveRC(){
+  try{localStorage.setItem('rc_checks',JSON.stringify(rcChecks));}catch(e){}
+  supaFetch('POST','roster_checks','on_conflict=id',{id:'south_theatres',checks:rcChecks},function(err){
+    if(err)console.warn('RC save failed:',err.message);
+  });
+}
 
 var rcWkOffset=0; // 0 = current week, -1 = last week, etc.
 
@@ -11967,6 +12066,7 @@ function poModalSubmit(){
   });
 
   savePO();
+  newRecs.forEach(function(r){savePOEntry(r,null);});
   document.getElementById('po-modal').remove();
   rPO();
   poShowEmailBtnMulti(newRecs);
@@ -11978,6 +12078,7 @@ function poSaveChargedDate(inp){
   if(!isNaN(ei)&&ei>=0&&poEdits[ei]){
     poEdits[ei][15]=inp.value;
     savePO();
+    savePOEntry(poEdits[ei],null);
   }
 }
 
