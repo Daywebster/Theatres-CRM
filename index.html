@@ -32,19 +32,35 @@ html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',-apple-system,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;display:flex;flex-direction:row}
 button,input{font-family:inherit;font-size:13px}
 /* LEFT SIDEBAR NAV */
-nav{background:var(--su);border-right:0.5px solid var(--b2);width:160px;min-width:160px;flex-shrink:0;display:flex;flex-direction:column;height:100%;overflow:hidden;z-index:1000;position:relative}
-.brand{padding:12px 12px 6px;flex-shrink:0}
+nav{background:#0d1b3e;border-right:none;width:168px;min-width:168px;flex-shrink:0;display:flex;flex-direction:column;height:100%;overflow:hidden;z-index:1000;position:relative}
+nav::-webkit-scrollbar{display:none}
+.brand{padding:14px 12px 6px;flex-shrink:0}
 .brand em{color:var(--t2);font-style:normal;font-weight:400}
 /* clock in sidebar */
-.nav-clock-wrap{padding:4px 12px 8px;border-bottom:0.5px solid var(--b1);margin-bottom:4px;flex-shrink:0}
+.nav-clock-wrap{padding:2px 12px 10px;border-bottom:0.5px solid rgba(255,255,255,0.1);margin-bottom:6px;flex-shrink:0}
 /* section labels */
-.nav-section{font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t2);padding:10px 12px 4px;margin-top:2px;border-top:0.5px solid var(--b1);flex-shrink:0}
-/* nav items */
-.ntab{padding:0 12px;height:28px;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:400;color:var(--t2);cursor:pointer;border-left:2px solid transparent;white-space:nowrap;user-select:none;border-radius:0 var(--r) var(--r) 0;margin:1px 5px 1px 0;flex-shrink:0}
-.ntab:hover{background:var(--su2);color:var(--tx)}
-.ntab.on{color:var(--bl);border-left-color:var(--bl);background:color-mix(in srgb,var(--bl) 8%,transparent);font-weight:500}
+.nav-section{font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,0.4);padding:10px 12px 4px;margin-top:2px;border-top:0.5px solid rgba(255,255,255,0.08);flex-shrink:0}
+/* nav items — top level */
+.ntab{padding:0 10px 0 14px;height:32px;display:flex;align-items:center;font-size:12.5px;font-weight:400;color:rgba(255,255,255,0.7);cursor:pointer;border-left:3px solid transparent;white-space:nowrap;user-select:none;flex-shrink:0;transition:background .12s,color .12s}
+.ntab:hover{background:rgba(255,255,255,0.07);color:#fff}
+.ntab.on{color:#fff;border-left-color:#00AEEF;background:rgba(0,174,239,0.12);font-weight:500}
+/* items inside a group get a subtle indent */
+.nav-group .ntab{padding-left:20px;height:30px;font-size:12px;color:rgba(255,255,255,0.55)}
+.nav-group .ntab:hover{color:rgba(255,255,255,0.9)}
+.nav-group .ntab.on{color:#fff}
+/* top-level pinned items */
+.ntab-top{font-size:13px;font-weight:600;color:#ffffff;height:34px;justify-content:space-between;padding-right:12px}
+.ntab-top:hover{color:#fff;background:rgba(255,255,255,0.07)}
+.ntab-top.on{color:#fff}
 /* settings at bottom */
-.nav-bottom{margin-top:auto;padding:7px 8px;border-top:0.5px solid var(--b1);flex-shrink:0}
+.nav-bottom{margin-top:auto;padding:7px 8px;border-top:0.5px solid rgba(255,255,255,0.1);flex-shrink:0}
+/* collapsible section headers */
+.nav-section-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 10px 6px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#ffffff;border-top:0.5px solid rgba(255,255,255,0.12);margin-top:6px;cursor:pointer;flex-shrink:0;user-select:none}
+.nav-section-hdr:hover{color:#fff}
+.nav-chev{font-size:9px;transition:transform .2s;opacity:.5;margin-right:2px}
+.nav-chev.closed{transform:rotate(-90deg)}
+.nav-group{overflow:hidden;transition:max-height .25s ease}
+.nav-group.closed{max-height:0!important}
 /* body becomes row */
 #app{flex:1;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
 .pg{display:none;flex:1;overflow:hidden;flex-direction:column}.pg.on{display:flex}
@@ -178,18 +194,14 @@ table.st tbody tr:hover td{background:var(--su2)}
 .ngrp-item.on{color:var(--bl);font-weight:500}
 
 /* DAY WEBSTER BRANDING */
-nav{background:linear-gradient(to right,#ffffff 0%,#e8f6fb 65%,#c8e6f0 100%)!important;border-bottom:1.5px solid #d0e8f0!important;box-shadow:0 2px 8px rgba(0,0,0,.07)!important}
-.ntab{color:#1a5f7a!important;font-size:12.5px!important}
-.ntab:hover{color:#003087!important}
-.ntab.on{color:#003087!important;border-bottom-color:#00AEEF!important;font-weight:600!important}
-.ngrp-btn{color:#1a5f7a!important;font-size:12.5px!important;border:none!important;background:none!important}
-.ngrp-btn:hover{color:#003087!important}
-.ngrp-btn.on{color:#003087!important;border-bottom-color:#00AEEF!important;font-weight:600!important}
-.ngrp-drop{background:#fff!important;border-color:#d0e8f0!important;box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
-.ngrp-item{color:#1a5f7a!important;font-size:13px!important}
-.ngrp-item:hover{background:#f0f8fc!important;color:#003087!important}
+nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8px rgba(0,0,0,.2)!important}
+.ntab{color:rgba(255,255,255,0.7)!important;font-size:12.5px!important}
+.ntab:hover{background:rgba(255,255,255,0.07)!important;color:#fff!important}
+.ntab.on{color:#fff!important;border-left-color:#00AEEF!important;background:rgba(0,174,239,0.12)!important;font-weight:500!important}
+.nav-section-hdr{color:rgba(255,255,255,0.45)!important}
+.nav-section-hdr:hover{color:rgba(255,255,255,0.75)!important}
 .ngrp-item.on{color:#00AEEF!important;font-weight:600!important}
-#nav-clock{color:#003087!important;font-size:18px!important;font-weight:700!important}
+#nav-clock{color:rgba(255,255,255,0.85)!important;font-size:13px!important;font-weight:400!important}
 
 /* TRUST CARDS */
 .trust-card{transition:box-shadow .2s,transform .2s}
@@ -200,56 +212,76 @@ nav{background:linear-gradient(to right,#ffffff 0%,#e8f6fb 65%,#c8e6f0 100%)!imp
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
 </head>
 <body>
-<nav>
+<nav style="display:flex;flex-direction:column">
   <!-- Logo -->
   <div class="brand">
     <svg width="150" height="32" viewBox="0 0 210 44" xmlns="http://www.w3.org/2000/svg">
       <circle cx="30" cy="26" r="12" fill="#7ab8d4"/>
       <circle cx="33" cy="14" r="8" fill="#aad4e8"/>
       <circle cx="16" cy="22" r="15" fill="#1a3a5c"/>
-      <text x="48" y="26" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#555555">Day</text>
-      <text x="84" y="26" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#333333">Webster</text>
+      <text x="48" y="26" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="rgba(255,255,255,0.8)">Day</text>
+      <text x="84" y="26" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#ffffff">Webster</text>
       <text x="149" y="37" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="500" fill="#00AEEF" letter-spacing="0.3">Group</text>
     </svg>
-    <div style="font-size:9px;font-weight:600;color:#888;letter-spacing:.12em;text-transform:uppercase;margin-top:3px">South Theatres</div>
+    <div style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:.12em;text-transform:uppercase;margin-top:3px">South Theatres</div>
   </div>
 
   <!-- Clock -->
   <div class="nav-clock-wrap">
-    <span id="nav-clock" style="font-size:13px;font-weight:400;font-family:'Share Tech Mono','Courier New',monospace;letter-spacing:.08em;color:#002060"></span>
+    <span id="nav-clock" style="font-size:15px;font-weight:400;font-family:'Share Tech Mono','Courier New',monospace;letter-spacing:.08em;color:rgba(255,255,255,0.85)"></span>
   </div>
 
-  <!-- Main -->
-  <div class="ntab on" id="tab-dashboard" onclick="gp('dashboard')"><span style="font-size:14px;opacity:.7">&#128200;</span> Dashboard</div>
-  <div class="ntab" id="tab-links" onclick="gp('links')"><span style="font-size:14px;opacity:.7">&#9875;</span> Quick Links</div>
-  <div class="ntab" id="tab-todo" onclick="gp('todo')"><span style="font-size:14px;opacity:.7">&#9989;</span> Tasks</div>
-  <div class="ntab" id="tab-clientdev" onclick="gp('clientdev')"><span style="font-size:14px;opacity:.7">&#128222;</span> Client Dev</div>
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none">
+  <!-- Top level -->
+  <div style="padding:6px 0 2px">
+    <div class="ntab ntab-top on" id="tab-dashboard" onclick="gp('dashboard')"><span>Dashboard</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div>
+    <div class="ntab ntab-top" id="tab-links" onclick="gp('links')"><span>Quick Links</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+    <div class="ntab ntab-top" id="tab-todo" onclick="gp('todo')"><span>Tasks</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+    <div class="ntab ntab-top" id="tab-summary" onclick="gp('summary')"><span>Weekly Summary</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+  </div>
 
-  <!-- Bookings -->
-  <div class="nav-section">Bookings</div>
-  <div class="ntab" id="tab-shifts" onclick="gp('shifts')">Shift count</div>
-  <div class="ntab" id="tab-summary" onclick="gp('summary')">Weekly summary</div>
-  <div class="ntab" id="tab-candidates" onclick="gp('candidates')">Candidates</div>
-  <div class="ntab" id="tab-hospitals" onclick="gp('hospitals')">Trusts</div>
-  <div class="ntab" id="tab-rates" onclick="gp('rates')">Rates</div>
-  <div class="ntab" id="tab-rostercheck" onclick="gp('rostercheck')">Roster Check</div>
-  <div class="ntab" id="tab-documents" onclick="gp('documents')">Documents</div>
-  <div class="ntab" id="tab-pipeline" onclick="gp('pipeline')">Pipeline</div>
-  <div class="ntab" id="tab-cascade" onclick="gp('cascade')">Shift Cascade</div>
 
-  <!-- Payroll -->
-  <div class="nav-section">Payroll</div>
-  <div class="ntab" id="tab-timesheets" onclick="gp('timesheets')">Timesheets</div>
-  <div class="ntab" id="tab-payonly" onclick="gp('payonly')">Pay Only</div>
-  <div class="ntab" id="tab-selfbill" onclick="gp('selfbill')">Self Bill</div>
-  <div class="ntab" id="tab-placement" onclick="gp('placement')">Live Placement</div>
-  <div class="ntab" id="tab-payqueries" onclick="gp('payqueries')">Pay Queries</div>
-  <div class="ntab" id="tab-divcon" onclick="gp('divcon')">Div Con</div>
-  <div class="ntab" id="tab-paycalc" onclick="gp('paycalc')">PAYE Calculator</div>
+  <!-- Candidates section -->
+  <div class="nav-section-hdr" id="ns-candidates" onclick="navToggle('candidates-sec')">
+    <span>&#128100; Candidates</span><span class="nav-chev" id="ns-chev-candidates-sec">&#9660;</span>
+  </div>
+  <div class="nav-group" id="ng-candidates-sec">
+    <div class="ntab" id="tab-shifts" onclick="gp('shifts')">Shift Count</div>
+    <div class="ntab" id="tab-candidates" onclick="gp('candidates')">Candidates</div>
+    <div class="ntab" id="tab-pipeline" onclick="gp('pipeline')">Pipeline</div>
+    <div class="ntab" id="tab-documents" onclick="gp('documents')">Documents</div>
+  </div>
 
+  <!-- Bookings section -->
+  <div class="nav-section-hdr" id="ns-bookings" onclick="navToggle('bookings')">
+    <span>&#127973; Bookings</span><span class="nav-chev" id="ns-chev-bookings">&#9660;</span>
+  </div>
+  <div class="nav-group" id="ng-bookings">
+    <div class="ntab" id="tab-hospitals" onclick="gp('hospitals')">Trusts</div>
+    <div class="ntab" id="tab-clientdev" onclick="gp('clientdev')">Client Dev</div>
+    <div class="ntab" id="tab-cascade" onclick="gp('cascade')">Shift Cascade</div>
+    <div class="ntab" id="tab-rostercheck" onclick="gp('rostercheck')">Roster Check</div>
+  </div>
+
+  <!-- Payroll section -->
+  <div class="nav-section-hdr" id="ns-payroll" onclick="navToggle('payroll')">
+    <span>&#128176; Payroll</span><span class="nav-chev" id="ns-chev-payroll">&#9660;</span>
+  </div>
+  <div class="nav-group" id="ng-payroll">
+    <div class="ntab" id="tab-timesheets" onclick="gp('timesheets')">Timesheets</div>
+    <div class="ntab" id="tab-rates" onclick="gp('rates')">Rates</div>
+    <div class="ntab" id="tab-payonly" onclick="gp('payonly')">Pay Only</div>
+    <div class="ntab" id="tab-selfbill" onclick="gp('selfbill')">Self Bill</div>
+    <div class="ntab" id="tab-placement" onclick="gp('placement')">Live Placement</div>
+    <div class="ntab" id="tab-payqueries" onclick="gp('payqueries')">Pay Queries</div>
+    <div class="ntab" id="tab-divcon" onclick="gp('divcon')">Div Con</div>
+    <div class="ntab" id="tab-paycalc" onclick="gp('paycalc')">PAYE Calculator</div>
+  </div>
+
+  </div><!-- end scroll wrapper -->
   <!-- Settings pinned to bottom -->
   <div class="nav-bottom">
-    <button onclick="toggleSettings()" id="settings-cog" title="Settings" style="background:none;border:0.5px solid var(--b2);cursor:pointer;padding:6px 12px;color:var(--t2);font-size:12px;border-radius:var(--r);width:100%;text-align:left" onmouseover="this.style.background='var(--su2)'" onmouseout="this.style.background='none'">&#9881; Settings</button>
+    <button onclick="toggleSettings()" id="settings-cog" title="Settings" style="background:none;border:0.5px solid rgba(255,255,255,0.15);cursor:pointer;padding:6px 12px;color:rgba(255,255,255,0.6);font-size:12px;border-radius:var(--r);width:100%;text-align:left" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">&#9881; Settings</button>
   </div>
 </nav>
 <div id="app">
@@ -3818,7 +3850,7 @@ function rateShowAdd(){
 
     // PAYE breakdown
     +'<div id="ram-paye-wrap" style="display:none;background:var(--su2);border-radius:var(--r);padding:10px 12px;margin-top:8px">'
-      +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown (13.8% employer NI)</div>'
+      +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown — 15% employer NI (2025/26)</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">'
         +'<div style="text-align:center"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Basic rate</div><div id="ram-paye-basic" style="font-size:13px;font-weight:700;color:var(--bl)">\u2014</div><div style="font-size:9px;color:var(--t3)">/hr</div></div>'
         +'<div style="text-align:center"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">PAYE rate (incl. hol)</div><div id="ram-paye-full" style="font-size:13px;font-weight:700;color:var(--bl)">\u2014</div><div style="font-size:9px;color:var(--t3)">/hr</div></div>'
@@ -3942,14 +3974,20 @@ function rateCalcPAYE(){
   // total cost to agency = pay + employerNI
   // margin = charge - totalCost (if charge entered)
 
-  var eniPct=13.8;
+  // 2025/26: 15% employer NI on earnings above £5,000/yr threshold
+  // In rate card modal, pay field = total_gross/hr (basic + holiday already included)
+  // We back-calculate: basic = pay / 1.1207
+  var NI_RATE_RC = 0.15;
+  var NI_THRESH_HR = 5000/52/37.5; // ~£2.564/hr threshold (based on 37.5hr week)
+  var LEVY_RC = 0.005;
   function calcRow(pay, charge){
     if(!pay)return null;
     var basic=Math.round(pay/1.1207*100)/100;
-    var eni=Math.round(pay*(eniPct/100)*100)/100;
-    var totalCost=Math.round((pay+eni)*100)/100;
+    var eni=Math.round(Math.max(0,pay-NI_THRESH_HR)*NI_RATE_RC*100)/100;
+    var lev=Math.round(pay*LEVY_RC*100)/100;
+    var totalCost=Math.round((pay+eni+lev)*100)/100;
     var margin=charge?Math.round((charge-totalCost)*100)/100:null;
-    return{basic:basic,paye:pay,eni:eni,totalCost:totalCost,margin:margin};
+    return{basic:basic,paye:pay,eni:eni,levy:lev,totalCost:totalCost,margin:margin};
   }
 
   var pd=parseFloat((document.getElementById('ram-pd')||{}).value)||0;
@@ -3990,7 +4028,7 @@ function rateCalcPAYE(){
   if(!hasAny){wrap.style.display='none';return;}
 
   // Header
-  var hdr='<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown \u2014 13.8% employer NI'+(cd||cn||cs?' (margin shown where charge entered)':'')+'</div>';
+  var hdr='<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">PAYE breakdown \u2014 15% employer NI (2025/26)'+(cd||cn||cs?' \u2014 margin shown where charge entered':'')+'</div>';
 
   wrap.innerHTML=hdr+rows;
 }
@@ -4031,15 +4069,34 @@ function rRates(){
     var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return p[2].replace(/^0/,'')+' '+months[+p[1]-1]+' '+p[0];
   }
-  function payeCalc(pay){
-    var p=parseFloat(pay)||0;
-    var wtr=parseFloat((p*0.1207).toFixed(2));
-    var payeHol=parseFloat((p+wtr).toFixed(2));
-    var erNi=parseFloat((p*0.138).toFixed(2));
-    var apLev=parseFloat((p*0.005).toFixed(2));
-    var pension=parseFloat((p*0.03).toFixed(2));
-    var total=parseFloat((payeHol+erNi+apLev+pension).toFixed(2));
-    return{basic:p,wtr:wtr,payeHol:payeHol,erNi:erNi,apLev:apLev,pension:pension,total:total};
+  function payeCalc(pay,charge,hours){
+    // pay = umbrella rate as typed in rate card (basic + holiday + all on-costs)
+    // charge = hospital charge rate; margin = charge - umbrella
+    var umbrella=parseFloat(pay)||0;
+    var cd=parseFloat(charge)||0;
+    var h=hours||37.5;
+    var HOL=0.1207, NI_RATE=0.15, P=0.03, LEVY=0.005;
+    var NI_THRESH_WK=5000/52, PENSION_LO_WK=6240/52;
+    // Closed-form: solve for basic given umbrella as gross
+    var numerator=umbrella+NI_RATE*(NI_THRESH_WK/h)+P*(PENSION_LO_WK/h)*(1-NI_RATE);
+    var denominator=(1+HOL)*(1+NI_RATE*(1-P)+P+LEVY);
+    var basic=numerator/denominator;
+    var holiday=basic*HOL;
+    var totalGross=basic+holiday;
+    var pension=P*Math.max(0,totalGross-PENSION_LO_WK/h);
+    var erNi=NI_RATE*Math.max(0,totalGross-pension-NI_THRESH_WK/h);
+    var apLev=LEVY*totalGross;
+    var margin=cd>0?cd-umbrella:null;
+    return{
+      basic:parseFloat(basic.toFixed(2)),
+      wtr:parseFloat(holiday.toFixed(2)),
+      payeHol:parseFloat(totalGross.toFixed(2)),
+      pension:parseFloat(pension.toFixed(2)),
+      erNi:parseFloat(erNi.toFixed(2)),
+      apLev:parseFloat(apLev.toFixed(2)),
+      umbrella:parseFloat(umbrella.toFixed(2)),
+      margin:margin
+    };
   }
   var hdrs=['Trust','Hospital','Ward/grade','Pay D','Pay N','Pay S','Charge D','Charge N','Charge S','Margin D',''];
   var tbl='<table style="border-collapse:collapse;width:100%;min-width:720px"><thead><tr style="border-bottom:0.5px solid var(--b2)">'
@@ -4054,7 +4111,7 @@ function rRates(){
       var badge=live
         ?'<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:600;background:var(--grbg);color:var(--grtx)">Live</span>'
         :'<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:500;background:var(--b1);color:var(--t3)">Inactive</span>';
-      var paye=payeCalc(r.pd||0);
+      var paye=payeCalc(r.pd||0,r.cd||0);
       var inp='width:100%;padding:6px 8px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--su);color:var(--tx);font-size:12px;outline:none;box-sizing:border-box';
       var expandRow='<tr id="rate-expand-'+ri+'" style="display:none;background:var(--bg)">'
         +'<td colspan="11" style="padding:0">'
@@ -4064,11 +4121,11 @@ function rRates(){
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Basic rate</span><span>\u00a3'+paye.basic.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Holiday pay (12.07%)</span><span>\u00a3'+paye.wtr.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">PAYE incl. hol</span><span>\u00a3'+paye.payeHol.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Employer NI (13.8%)</span><span>\u00a3'+paye.erNi.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Ap. levy (0.5%)</span><span>\u00a3'+paye.apLev.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Pension (3%)</span><span>\u00a3'+paye.pension.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;font-weight:600"><span>Total cost</span><span>\u00a3'+paye.total.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--grtx);font-weight:500"><span>Net margin</span><span>\u00a3'+((r.cd||0)-paye.total).toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Employer NI (15%)</span><span>\u00a3'+paye.erNi.toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Ap. levy (0.5%)</span><span>\u00a3'+paye.apLev.toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;font-weight:700;border-top:1px solid var(--b2);margin-top:2px"><span>Umbrella rate</span><span>\u00a3'+paye.umbrella.toFixed(2)+'</span></div>'
+              +(paye.margin!==null?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;font-weight:600;color:'+(paye.margin>=0?'var(--grtx)':'#c0392b')+'"><span>Margin</span><span>\u00a3'+paye.margin.toFixed(2)+'</span></div>':'')
             +'</div>'
             +'<div>'
               +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Dates &amp; status</div>'
@@ -5373,8 +5430,27 @@ function rotaChange(sel){
 }
 
 
-var _bookingPages=['shifts','summary','candidates','hospitals','rates','rostercheck','documents','pipeline','cascade'];
-var _payrollPages=['timesheets','payonly','selfbill','placement','payqueries','divcon','paycalc'];
+var _bookingPages=['hospitals','clientdev','cascade','rostercheck'];
+var _payrollPages=['timesheets','rates','payonly','selfbill','placement','payqueries','divcon','paycalc'];
+var _candidatePages=['shifts','candidates','pipeline','documents'];
+// Nav group open state
+var _navGroups={bookings:true,payroll:true,'candidates-sec':true};
+function navToggle(grp){
+  _navGroups[grp]=!_navGroups[grp];
+  var el=document.getElementById('ng-'+grp);
+  var chev=document.getElementById('ns-chev-'+grp);
+  if(el){
+    el.style.maxHeight=_navGroups[grp]?(el.scrollHeight+200)+'px':'0';
+    el.classList.toggle('closed',!_navGroups[grp]);
+  }
+  if(chev)chev.classList.toggle('closed',!_navGroups[grp]);
+}
+function navInitGroups(){
+  ['candidates-sec','bookings','payroll'].forEach(function(grp){
+    var el=document.getElementById('ng-'+grp);
+    if(el)el.style.maxHeight=(el.scrollHeight+200)+'px';
+  });
+}
 
 function gp(id){
   document.querySelectorAll('.pg').forEach(function(p){p.classList.remove('on');});
@@ -5383,14 +5459,10 @@ function gp(id){
   var tabEl=document.getElementById('tab-'+id);
   if(tabEl)tabEl.classList.add('on');
   // Highlight parent group button
-  if(_bookingPages.indexOf(id)>=0){
-    var btn=document.getElementById('ngrp-bookings-btn');
-    if(btn)btn.classList.add('on');
-  }
-  if(_payrollPages.indexOf(id)>=0){
-    var btn2=document.getElementById('ngrp-payroll-btn');
-    if(btn2)btn2.classList.add('on');
-  }
+  // Auto-open section containing the active page
+  if(_bookingPages.indexOf(id)>=0&&!_navGroups['bookings']){navToggle('bookings');}
+  if(_payrollPages.indexOf(id)>=0&&!_navGroups['payroll']){navToggle('payroll');}
+  if(_candidatePages.indexOf(id)>=0&&!_navGroups['candidates-sec']){navToggle('candidates-sec');}
   closeDD();
   if(id==='summary')rSum();
   if(id==='candidates'){
@@ -5873,6 +5945,7 @@ function tsInitSession(){
 
 // Init session bar listeners
 document.addEventListener('DOMContentLoaded',function(){
+  navInitGroups();
   // Load trusts + hospitals, then candidates, then rota + shift count
   loadTrustsFromSupabase(function(){
     loadCandidatesFromSupabase(function(){
@@ -8113,12 +8186,46 @@ var _splitHospA=null,_splitHospB=null;
 var _cdRows = [];
 var _cdLoaded = false;
 
-function cdLoad() {
-  try { var s = localStorage.getItem('dw_cd_rows'); if (s) _cdRows = JSON.parse(s); } catch(e) {}
-  _cdLoaded = true;
+function cdLoad(callback) {
+  supaFetch('GET','client_dev_crm','select=id,hospital,contact,title,email,phone,status,follow_up,notes&order=created_at.desc',null,function(err,rows){
+    if(err||!rows){
+      try{var s=localStorage.getItem('dw_cd_rows');if(s)_cdRows=JSON.parse(s);}catch(e){}
+      _cdLoaded=true;if(callback)callback();return;
+    }
+    _cdRows=rows.map(function(r){
+      return{id:r.id,hospital:r.hospital||'',contact:r.contact||'',
+        title:r.title||'',email:r.email||'',phone:r.phone||'',
+        status:r.status||'Cold',followUp:r.follow_up||'',notes:r.notes||''};
+    });
+    try{localStorage.setItem('dw_cd_rows',JSON.stringify(_cdRows));}catch(e){}
+    console.log('Loaded '+_cdRows.length+' client dev rows from Supabase');
+    _cdLoaded=true;if(callback)callback();
+  });
 }
+
 function cdSave() {
   try { localStorage.setItem('dw_cd_rows', JSON.stringify(_cdRows)); } catch(e) {}
+}
+
+function cdSaveEntry(row,callback){
+  var body={id:row.id,hospital:row.hospital||'',contact:row.contact||'',
+    title:row.title||'',email:row.email||'',phone:row.phone||'',
+    status:row.status||'Cold',follow_up:row.followUp||null,notes:row.notes||''};
+  fetch(SUPA_URL+'/rest/v1/client_dev_crm?on_conflict=id',{
+    method:'POST',
+    headers:Object.assign(supaHeaders(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+    body:JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok)r.text().then(function(t){console.warn('CD save failed:',r.status,t);});
+    if(callback)callback(r.ok?null:{message:r.status});
+  }).catch(function(e){if(callback)callback({message:e.message});});
+}
+
+function cdDeleteEntry(rowId,callback){
+  supaFetch('DELETE','client_dev_crm','id=eq.'+encodeURIComponent(rowId),null,function(err){
+    if(err)console.warn('CD delete failed:',err.message);
+    if(callback)callback(err);
+  });
 }
 function cdTodayStr() { return new Date().toISOString().slice(0, 10); }
 function cdFmtDate(d) {
@@ -8153,7 +8260,16 @@ var CD_STATUS_COLORS = {
 };
 
 function rCD() {
-  if (!_cdLoaded) cdLoad();
+  var el = document.getElementById('cd-main');
+  if (!el) return;
+  if (!_cdLoaded) {
+    if(el)el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3)">Loading…</div>';
+    cdLoad(function(){_rCDRender();});
+    return;
+  }
+  _rCDRender();
+}
+function _rCDRender() {
   var el = document.getElementById('cd-main');
   if (!el) return;
 
@@ -8295,6 +8411,7 @@ function cdSaveNew() {
 
   _cdRows.push(row);
   cdSave();
+  cdSaveEntry(row,null);
   rCD();
   // Focus the new blank row's first input
   setTimeout(function() {
@@ -8322,11 +8439,11 @@ function cdSaveRow(idx) {
     if (el) row[col.key] = el.value || '';
   });
   delete row._editing;
-  // Create task if follow-up newly set
   if (row.followUp && row.followUp !== oldFollowUp) {
     cdMaybeCreateTask(row);
   }
   cdSave();
+  cdSaveEntry(row,null);
   rCD();
 }
 
@@ -8342,27 +8459,48 @@ function cdCancelEdit(idx) {
 
 function cdDeleteRow(idx) {
   if (!confirm('Delete this row?')) return;
+  var row=_cdRows[idx];
   _cdRows.splice(idx, 1);
   cdSave();
+  if(row&&row.id)cdDeleteEntry(row.id,null);
   rCD();
 }
 
 function cdMaybeCreateTask(row) {
   if (!row.followUp) return;
   var title = row.contact ? 'Call ' + row.contact + ' at ' + row.hospital : 'Call ' + row.hospital;
-  if (!_todoLoaded) { loadTasks(); _todoLoaded = true; }
-  _tasks.push({ id: 't' + Date.now(), type: 'Call', note: title, cand: '', hosp: row.hospital, due: row.followUp, done: false, created: cdTodayStr(), notes: row.notes || '' });
+  var _cdTask={ id: 't' + Date.now(), type: 'Call', note: title, cand: '', hosp: row.hospital, due: row.followUp, done: false, created: cdTodayStr(), notes: row.notes || '' };
+  _tasks.push(_cdTask);
   saveTasks();
+  saveTaskEntry(_cdTask,null);
 }
 
 // \u2500\u2500 TODO / TASK MANAGER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 var _tasks=[];
 var _recurring=[];
 var _todoLoaded=false;
+var _CONSULTANTS=['Rachel','Josh','Jason','Other'];
+var _todoConsultant=(function(){try{return localStorage.getItem('dw_todo_consultant')||'';}catch(e){return'';}}());
+var _todoShowAll=false;
 
-function loadTasks(){
-  try{var t=localStorage.getItem('dw_tasks');if(t)_tasks=JSON.parse(t);}catch(e){}
-  try{var r=localStorage.getItem('dw_recurring');if(r)_recurring=JSON.parse(r);}catch(e){}
+function loadTasks(callback){
+  supaFetch('GET','tasks_crm','select=id,type,note,candidate,hospital,due_date,done,created_date,recurring_id,notes&order=due_date.asc',null,function(err,rows){
+    if(err||!rows){
+      try{var t=localStorage.getItem('dw_tasks');if(t)_tasks=JSON.parse(t);}catch(e){}
+    } else {
+      _tasks=rows.map(function(r){
+        return{id:r.id,type:r.type||'Call',note:r.note||'',cand:r.candidate||'',
+          hosp:r.hospital||'',due:r.due_date||'',done:r.done||false,
+          created:r.created_date||'',recurringId:r.recurring_id||'',
+          notes:r.notes||'',consultant:r.consultant||''};
+      });
+      try{localStorage.setItem('dw_tasks',JSON.stringify(_tasks));}catch(e){}
+      console.log('Loaded '+_tasks.length+' tasks from Supabase');
+    }
+    // Load recurring from localStorage (templates are local-only for now)
+    try{var r=localStorage.getItem('dw_recurring');if(r)_recurring=JSON.parse(r);}catch(e){}
+    if(callback)callback();
+  });
 }
 
 function saveTasks(){
@@ -8371,6 +8509,30 @@ function saveTasks(){
 
 function saveRecurring(){
   try{localStorage.setItem('dw_recurring',JSON.stringify(_recurring));}catch(e){}
+}
+
+function saveTaskEntry(t,callback){
+  var body={
+    id:t.id,type:t.type||'Call',note:t.note||'',candidate:t.cand||'',
+    hospital:t.hosp||'',due_date:t.due||null,done:t.done||false,
+    created_date:t.created||todayStr(),recurring_id:t.recurringId||null,
+    notes:t.notes||'',consultant:t.consultant||''
+  };
+  fetch(SUPA_URL+'/rest/v1/tasks_crm?on_conflict=id',{
+    method:'POST',
+    headers:Object.assign(supaHeaders(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+    body:JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok)r.text().then(function(t){console.warn('Task save failed:',r.status,t);});
+    if(callback)callback(r.ok?null:{message:r.status});
+  }).catch(function(e){if(callback)callback({message:e.message});});
+}
+
+function deleteTaskEntry(tid,callback){
+  supaFetch('DELETE','tasks_crm','id=eq.'+encodeURIComponent(tid),null,function(err){
+    if(err)console.warn('Task delete failed:',err.message);
+    if(callback)callback(err);
+  });
 }
 
 function todayStr(){
@@ -8385,7 +8547,7 @@ function todoRollover(){
   _tasks.forEach(function(t){
     if(!t.done&&t.due&&t.due<today){t.due=today;changed=true;}
   });
-  if(changed)saveTasks();
+  if(changed){saveTasks();_tasks.filter(function(t){return!t.done;}).forEach(function(t){saveTaskEntry(t,null);});}
 }
 
 function todoGenerateRecurring(){
@@ -8405,17 +8567,11 @@ function todoGenerateRecurring(){
     // Check not already generated today
     var exists=_tasks.some(function(t){return t.recurringId===tmpl.id&&t.due===today;});
     if(!exists){
-      _tasks.push({
-        id:'t'+Date.now()+Math.random(),
-        type:tmpl.type,
-        note:tmpl.note,
-        cand:tmpl.cand||'',
-        hosp:tmpl.hosp||'',
-        due:today,
-        done:false,
-        recurringId:tmpl.id,
-        created:today
-      });
+      var _genTask={id:'t'+Date.now()+Math.random(),type:tmpl.type,note:tmpl.note,
+        cand:tmpl.cand||'',hosp:tmpl.hosp||'',due:today,done:false,
+        recurringId:tmpl.id,created:today};
+      _tasks.push(_genTask);
+      saveTaskEntry(_genTask,null);
     }
   });
   saveTasks();
@@ -8463,6 +8619,12 @@ function todoShowAdd(){
     +'<div><label style="'+lbl+'">Hospital</label>'
       +'<select id="todo-hosp" style="'+inp+'">'+hospOpts+'</select></div>'
   +'</div>'
+  +'<div style="margin-bottom:12px"><label style="'+lbl+'">Consultant</label>'
+    +'<select id="todo-consultant" style="'+inp+'">'
+      +'<option value="">-- unassigned --</option>'
+      +_CONSULTANTS.map(function(c){return'<option value="'+c+'"'+(c===_todoConsultant?' selected':'')+'>'+c+'</option>';}).join('')
+    +'</select>'
+  +'</div>'
 
   +'<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:0.5px solid var(--b1)">'
     +'<button onclick="document.getElementById(\'todo-add-modal\').remove()" style="padding:7px 16px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:13px;color:var(--t2)">Cancel</button>'
@@ -8480,10 +8642,19 @@ function todoShowAdd(){
   setTimeout(function(){var n=document.getElementById('todo-note');if(n)n.focus();},50);
 }
 function rTodo(){
-  if(!_todoLoaded){loadTasks();_todoLoaded=true;}
+  var el=document.getElementById('todo-main');
+  if(!el)return;
+  if(!_todoLoaded){
+    _todoLoaded=true;
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3)">Loading tasks…</div>';
+    loadTasks(function(){todoRollover();todoGenerateRecurring();_rTodoRender();});
+    return;
+  }
+  _rTodoRender();
+}
+function _rTodoRender(){
   todoRollover();
   todoGenerateRecurring();
-
   var el=document.getElementById('todo-main');
   if(!el)return;
 
@@ -8495,9 +8666,10 @@ function rTodo(){
     'Call':'var(--blbg)','Email':'#f0ebff','WhatsApp':'#e8fdf0','Chase':'var(--ambg)','Admin':'var(--su2)'
   };
 
-  var todayTasks=_tasks.filter(function(t){return t.due===today&&!t.done;});
-  var doneTodayTasks=_tasks.filter(function(t){return t.due===today&&t.done;});
-  var upcomingTasks=_tasks.filter(function(t){return t.due>today&&!t.done;}).sort(function(a,b){return a.due<b.due?-1:1;});
+  var _consFilter=_todoConsultant;
+  var todayTasks=_tasks.filter(function(t){return t.due===today&&!t.done&&(!_consFilter||!t.consultant||t.consultant===_consFilter);});
+  var doneTodayTasks=_tasks.filter(function(t){return t.due===today&&t.done&&(!_consFilter||!t.consultant||t.consultant===_consFilter);});
+  var upcomingTasks=_tasks.filter(function(t){return t.due>today&&!t.done&&(!_consFilter||!t.consultant||t.consultant===_consFilter);}).sort(function(a,b){return a.due<b.due?-1:1;});
 
   // Group today by type
   var types=['Call','Email','WhatsApp','Chase','Admin'];
@@ -8512,9 +8684,15 @@ function rTodo(){
     return'<option value="'+esc(s)+'">'+esc(s)+'</option>';
   }).join('');
 
+  var consOpts=_CONSULTANTS.map(function(c){
+    return'<option value="'+c+'"'+(c===_todoConsultant?' selected':'')+'>'+c+'</option>';
+  }).join('');
   html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
     +'<div class="sh" style="margin:0;flex:1">Tasks</div>'
-    +'<button onclick="todoManageRecurring()" style="padding:5px 12px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:12px;color:var(--t2)">Manage recurring tasks</button>'
+    +'<select onchange="todoSetConsultant(this.value)" style="padding:5px 9px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--su);color:var(--tx);font-size:12px;outline:none">'
+      +'<option value="">All consultants</option>'+consOpts
+    +'</select>'
+    +'<button onclick="todoManageRecurring()" style="padding:5px 12px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:12px;color:var(--t2)">Recurring</button>'
     +'<button onclick="todoShowAdd()" class="ef-save" style="padding:5px 14px;font-size:12px">+ Add task</button>'
   +'</div>'
   +'<div style="display:grid;grid-template-columns:1fr 340px;gap:10px;align-items:start">'
@@ -8574,19 +8752,42 @@ function rTodo(){
     html+='</div></details>';
   }
 
-  // \u2500\u2500 Recurring templates \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // History
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-30);
+  var cutoffStr=cutoff.toISOString().slice(0,10);
+  var histTasks=_tasks.filter(function(t){
+    return t.done&&t.due<today&&t.due>=cutoffStr&&(!_consFilter||!t.consultant||t.consultant===_consFilter);
+  }).sort(function(a,b){return a.due>b.due?-1:1;});
+
+  if(histTasks.length){
+    html+='<details style="margin-top:18px">'
+      +'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 0;border-top:0.5px solid var(--b1)">'
+        +'<span style="font-size:12px;font-weight:600;color:var(--t2)">&#128203; History</span>'
+        +'<span style="font-size:11px;color:var(--t3)">'+histTasks.length+' completed in last 30 days</span>'
+      +'</summary>'
+      +'<div style="margin-top:10px">';
+    var histDates=[...new Set(histTasks.map(function(t){return t.due;}))];
+    histDates.forEach(function(date){
+      var dateTasks=histTasks.filter(function(t){return t.due===date;});
+      var d=new Date(date+'T12:00:00');
+      var label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+      html+='<div style="margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;padding-bottom:4px;border-bottom:0.5px solid var(--b1)">'+label+'</div>';
+      html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;align-items:start">';
+      dateTasks.forEach(function(t){html+=todoCard(t,typeColors,typeBg);});
+      html+='</div></div>';
+    });
+    html+='</div></details>';
+  }
+
     html+='</div>';
   html+='<div id="todo-right-col"></div>';
   html+='</div>';
 
   el.innerHTML=html;
-  // Populate right col with quiet clients + pipeline overdue
+  // Populate right col with pipeline overdue only
   var rc2=document.getElementById('todo-right-col');
   if(rc2){
-    var qcWrap=document.createElement('div');
-    qcWrap.id='todo-quiet-clients';
-    qcWrap.style.cssText='background:var(--su);border:0.5px solid var(--b1);border-radius:var(--rl);padding:10px 12px;margin-bottom:14px';
-    rc2.appendChild(qcWrap);
     var poWrap=document.createElement('div');
     poWrap.id='todo-pipeline-overdue';
     poWrap.style.cssText='background:var(--su);border:0.5px solid var(--b1);border-radius:var(--rl);padding:10px 12px';
@@ -8611,8 +8812,6 @@ function rTodo(){
       rTodo();
     });
   });
-  loadHospActivity();
-  renderQuietClients();
   renderPipelineOverdue();
 }
 
@@ -8631,9 +8830,10 @@ function todoCard(t,typeColors,typeBg){
           +(t.recurringId?'<span style="font-size:9px;color:var(--t3)" title="Recurring">&#8635;</span>':'')
         +'</div>'
         +'<div style="font-size:12px;color:#222;line-height:1.4;word-break:break-word;'+doneTextStyle+'">'+esc(t.note)+'</div>'
-        +(t.cand||t.hosp?'<div style="margin-top:5px;display:flex;flex-direction:column;gap:2px">'
+        +(t.cand||t.hosp||t.consultant?'<div style="margin-top:5px;display:flex;flex-direction:column;gap:2px">'
           +(t.cand?'<span style="font-size:10px;color:#1a5276;cursor:pointer;font-weight:500" onclick="gp(\'candidates\')">&#128100; '+esc(t.cand)+'</span>':'')
           +(t.hosp?'<span style="font-size:10px;color:#555">&#127973; '+esc(t.hosp)+'</span>':'')
+          +(t.consultant?'<span style="font-size:10px;color:var(--t3)">&#128100; '+esc(t.consultant)+'</span>':'')
         +'</div>':'')
       +'</div>'
     +'</div>'
@@ -8648,20 +8848,29 @@ function todoAdd(){
   var hosp=(document.getElementById('todo-hosp')||{}).value||'';
   var due=(document.getElementById('todo-due')||{}).value||todayStr();
   if(!note){alert('Please enter a task description');return;}
-  _tasks.push({id:'t'+Date.now(),type:type,note:note,cand:cand,hosp:hosp,due:due,done:false,created:todayStr()});
+  var cons=(document.getElementById('todo-consultant')||{}).value||_todoConsultant||'';
+  var _newTask={id:'t'+Date.now(),type:type,note:note,cand:cand,hosp:hosp,due:due,done:false,created:todayStr(),consultant:cons};
+  _tasks.push(_newTask);
   saveTasks();
+  saveTaskEntry(_newTask,null);
   rTodo();
 }
 
 function todoToggle(id){
   var t=_tasks.find(function(t){return t.id===id;});
-  if(t)t.done=!t.done;
-  saveTasks();rTodo();
+  if(t){t.done=!t.done;saveTasks();saveTaskEntry(t,null);}
+  rTodo();
 }
 
 function todoDelete(id){
   _tasks=_tasks.filter(function(t){return t.id!==id;});
-  saveTasks();rTodo();
+  saveTasks();deleteTaskEntry(id,null);rTodo();
+}
+
+function todoSetConsultant(val){
+  _todoConsultant=val;
+  try{localStorage.setItem('dw_todo_consultant',val);}catch(e){}
+  rTodo();
 }
 
 
@@ -10899,7 +11108,7 @@ function rPayCalc(){
     // Page header
     +'<div style="margin-bottom:12px">'
       +'<div class="sh">PAYE Calculator</div>'
-      +'<div style="font-size:12px;color:var(--t3);margin-top:3px">Calculates pay rate, employer on-costs and estimated employee take-home based on 2024/25 thresholds</div>'
+      +'<div style="font-size:12px;color:var(--t3);margin-top:3px">2025/26 thresholds — 15% employer NI, £5,000 secondary threshold, 12.07% holiday pay rolled up. Closed-form algebraic solution (no iteration).</div>'
     +'</div>'
 
     // Inputs card
@@ -10935,7 +11144,7 @@ function rPayCalc(){
         +'<div>'
           +'<div style="font-size:11px;color:var(--t2);font-weight:500;margin-bottom:5px">Employer NI</div>'
           +'<div style="display:flex;align-items:center;border:0.5px solid var(--b2);border-radius:var(--r);overflow:hidden;background:var(--su)">'
-            +'<input id="pc-eni" type="number" min="0" max="30" step="0.1" value="13.8" oninput="pcCalc()" style="flex:1;padding:8px 10px;border:none;background:var(--su);color:var(--tx);font-size:13px;outline:none;width:0">'
+            +'<input id="pc-eni" type="number" min="0" max="30" step="0.1" value="15" oninput="pcCalc()" style="flex:1;padding:8px 10px;border:none;background:var(--su);color:var(--tx);font-size:13px;outline:none;width:0">'
             +'<span style="padding:8px 10px;background:var(--su2);color:var(--t2);font-size:13px;border-left:0.5px solid var(--b2)">%</span>'
           +'</div>'
         +'</div>'
@@ -10998,39 +11207,52 @@ function pcCalc(){
   var el=document.getElementById('pc-results');
   if(!el||!charge)return;
 
-  // \u2500\u2500 Core calculation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  // Revenue after margin = charge - margin
-  var revenueAfterMargin=charge-marginGbp;
-  var employerCostMultiplier=1+(eniPct/100)+(pensionPct/100);
-  var payRateHr=revenueAfterMargin/employerCostMultiplier;
-  var employerNI=payRateHr*(eniPct/100);
-  var employerPension=payRateHr*(pensionPct/100);
-  var totalCost=payRateHr+employerNI+employerPension;
-  var marginActualPct=charge>0?(marginGbp/charge)*100:0;
+  // 2025/26 constants
+  var NI_RATE      = eniPct/100;
+  var NI_THRESH_WK = 5000/52;
+  var P            = pensionOn?(pensionPct/100):0;
+  var PENSION_LO   = 6240/52;
+  var PENSION_HI   = 50270/52;
+  var LEVY         = 0.005;
+  var HOL          = 0.1207;
+
+  // Closed-form solution (algebraic, no iteration needed)
+  var gross = charge - marginGbp;
+  var numerator   = gross + NI_RATE*(NI_THRESH_WK/hours) + P*(PENSION_LO/hours)*(1-NI_RATE);
+  var denominator = (1+HOL) * (1 + NI_RATE*(1-P) + P + LEVY);
+  var basicRateHr = numerator / denominator;
+  var holRateHr   = basicRateHr * HOL;
+  var payRateHr   = basicRateHr + holRateHr;
+
+  // Employer on-costs per hour
+  var employerPension = P>0 ? P*Math.max(0, payRateHr - PENSION_LO/hours) : 0;
+  var employerNI      = NI_RATE * Math.max(0, payRateHr - employerPension - NI_THRESH_WK/hours);
+  var levy            = LEVY * payRateHr;
+  var totalCost       = payRateHr + employerNI + employerPension + levy;
+  var marginActualPct = charge>0?(marginGbp/charge)*100:0;
 
   // Weekly figures
-  var wCharge=charge*hours;
-  var wPay=payRateHr*hours;
-  // payRateHr is the PAYE rate (holiday-inclusive). Split into basic + holiday.
-  // Basic = PAYE rate / 1.1207,  Holiday = PAYE rate - Basic
-  var holRate=0.1207;
-  var basicRateHr=Math.round(payRateHr/1.1207*100)/100;
-  var holRateHr=Math.round((payRateHr-basicRateHr)*100)/100;
-  var basicWk=Math.round(basicRateHr*hours*100)/100;
-  var holWk=Math.round(holRateHr*hours*100)/100;
-  // payeRateHr = payRateHr (no addition - holiday is already inside)
-  var payeRateHr=payRateHr;
-  var payeWk=Math.round(payeRateHr*hours*100)/100;
-  // wPay and grossWk are the same - grossWk defined in employee section below
-  var wMargin=marginGbp*hours;
-  var wENI=employerNI*hours;
-  var wPension=employerPension*hours;
+  var wCharge  = charge*hours;
+  var payeRateHr = payRateHr;
+  var payeWk   = payRateHr*hours;
+  var basicWk  = basicRateHr*hours;
+  var holWk    = holRateHr*hours;
+  var wPay     = payRateHr*hours;
+  var wMargin  = marginGbp*hours;
+  var wENI     = employerNI*hours;
+  var wPension = employerPension*hours;
+  var wLevy    = levy*hours;
+
+  // Validation
+  var NMW = 12.21;
+  var belowNMW  = basicRateHr < NMW;
+  var belowZero = basicRateHr < 0;
 
   // \u2500\u2500 Employee deductions (proper PAYE weekly basis) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   var taxCode=(document.getElementById('pc-taxcode')||{value:'1257L'}).value||'1257L';
   var kAmt=taxCode==='K'?(parseFloat((document.getElementById('pc-kcode')||{value:0}).value)||0):0;
 
-  // 2024/25 annual thresholds -> weekly
+  // 2025/26 employee deduction thresholds (weekly)
   var NI_LOW_WK   = 12570/52;   // \u00a3242.00 - employee NI primary threshold
   var NI_HIGH_WK  = 50270/52;   // \u00a3966.73 - upper earnings limit
   var PA_WK       = 12570/52;   // \u00a3242.00 - personal allowance (1257L)
@@ -11119,11 +11341,16 @@ function pcCalc(){
     +row('Charge rate',charge,wCharge,'var(--tx)')
     +row('Margin ('+fmtPct(marginActualPct)+' of charge)',marginGbp,wMargin,'var(--grtx)')
     +'<div style="height:4px;background:var(--su2)"></div>'
-    +row('Pay rate (gross)',payRateHr,wPay,'var(--bl)')
+    +row('Pay rate (basic + hol)',payRateHr,wPay,'var(--bl)')
+    +row('  └ Basic pay ('+fmtPct(100)+')',basicRateHr,basicWk,'var(--t2)')
+    +row('  └ Holiday pay (12.07%)',holRateHr,holWk,'var(--t2)')
     +row('Employer NI ('+fmtPct(eniPct)+')',employerNI,wENI,'var(--amtx)')
     +(pensionOn?row('Employer pension ('+fmtPct(pensionPct)+')',employerPension,wPension,'var(--amtx)'):'')
+    +row('Apprenticeship levy (0.5%)',levy,wLevy,'var(--amtx)')
+    +(belowNMW&&!belowZero?'<div style="padding:8px 12px;background:#fdf0ee;color:#c0392b;font-size:12px;font-weight:500">&#9888;&#65039; Basic rate £'+basicRateHr.toFixed(2)+'/hr is below NMW (£12.21) — cannot legally pay this rate</div>':'')
+    +(belowZero?'<div style="padding:8px 12px;background:#fdf0ee;color:#c0392b;font-size:12px;font-weight:500">&#9888;&#65039; Margin too high — results in negative pay rate</div>':'')
     +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:9px 12px;background:var(--su2);align-items:center">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--tx)">Total cost</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--tx)">Total cost to agency</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);text-align:right">'+fmt(totalCost)+'</div>'
       +'<div style="font-size:12px;font-weight:600;color:var(--tx);text-align:right">'+fmt(totalCost*hours)+'</div>'
     +'</div>'
@@ -11135,7 +11362,7 @@ function pcCalc(){
     +header()
     +row('Basic pay',basicRateHr,basicWk,'var(--bl)')
     +row('Holiday pay (12.07%)',holRateHr,holWk,'var(--bl)')
-    +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:6px 12px;background:var(--blbg);align-items:center">'      +'<div style="font-size:12px;font-weight:600;color:var(--bltx)">Total PAYE rate (Basic + Hol)</div>'      +'<div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeRateHr)+'</div>'      +'<div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeWk)+'</div>'    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;padding:6px 12px;background:var(--blbg);align-items:center"><div style="font-size:12px;font-weight:600;color:var(--bltx)">Total PAYE rate (Basic + Hol)</div><div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeRateHr)+'</div><div style="font-size:12px;font-weight:700;color:var(--bltx);text-align:right">'+fmt(payeWk)+'</div></div>'
     +row('Employee NI (8%/2% banded)',empNIWk/hours,empNIWk,'var(--amtx)')
     +row('Income tax \u2014 '+taxCode,empTaxWk/hours,empTaxWk,'var(--amtx)')
     +(pensionOn?row('Employee pension (5% qualifying)',empPensionWk/hours,empPensionWk,'var(--amtx)'):'')
