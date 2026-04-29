@@ -248,6 +248,7 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
   <div class="nav-group" id="ng-candidates-sec">
     <div class="ntab" id="tab-shifts" onclick="gp('shifts')">Shift Count</div>
     <div class="ntab" id="tab-candidates" onclick="gp('candidates')">Candidates</div>
+    <div class="ntab" id="tab-pipeline" onclick="gp('pipeline')">Pipeline</div>
     <div class="ntab" id="tab-documents" onclick="gp('documents')">Documents</div>
   </div>
 
@@ -259,7 +260,6 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
     <div class="ntab" id="tab-hospitals" onclick="gp('hospitals')">Trusts</div>
     <div class="ntab" id="tab-clientdev" onclick="gp('clientdev')">Client Dev</div>
     <div class="ntab" id="tab-cascade" onclick="gp('cascade')">Shift Cascade</div>
-    <div class="ntab" id="tab-pipeline" onclick="gp('pipeline')">Pipeline</div>
     <div class="ntab" id="tab-rostercheck" onclick="gp('rostercheck')">Roster Check</div>
   </div>
 
@@ -5430,9 +5430,9 @@ function rotaChange(sel){
 }
 
 
-var _bookingPages=['hospitals','clientdev','cascade','pipeline','rostercheck'];
+var _bookingPages=['hospitals','clientdev','cascade','rostercheck'];
 var _payrollPages=['timesheets','rates','payonly','selfbill','placement','payqueries','divcon','paycalc'];
-var _candidatePages=['shifts','candidates','documents'];
+var _candidatePages=['shifts','candidates','pipeline','documents'];
 // Nav group open state
 var _navGroups={bookings:true,payroll:true,'candidates-sec':true};
 function navToggle(grp){
