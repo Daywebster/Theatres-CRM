@@ -4037,27 +4037,33 @@ function rRates(){
     var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return p[2].replace(/^0/,'')+' '+months[+p[1]-1]+' '+p[0];
   }
-  function payeCalc(pay,hours){
-    // pay = basic hourly rate, hours = hrs/week (default 37.5)
-    // 2025/26: correct on-costs calculated from basic upward
-    var p=parseFloat(pay)||0;
+  function payeCalc(pay,charge,hours){
+    // pay = umbrella rate as typed in rate card (basic + holiday + all on-costs)
+    // charge = hospital charge rate; margin = charge - umbrella
+    var umbrella=parseFloat(pay)||0;
+    var cd=parseFloat(charge)||0;
     var h=hours||37.5;
     var HOL=0.1207, NI_RATE=0.15, P=0.03, LEVY=0.005;
     var NI_THRESH_WK=5000/52, PENSION_LO_WK=6240/52;
-    var wtr=p*HOL;
-    var payeHol=p+wtr;
-    var pension_hr=P*Math.max(0,payeHol-PENSION_LO_WK/h);
-    var erNi_hr=NI_RATE*Math.max(0,payeHol-pension_hr-NI_THRESH_WK/h);
-    var apLev_hr=LEVY*payeHol;
-    var total_hr=payeHol+erNi_hr+pension_hr+apLev_hr;
+    // Closed-form: solve for basic given umbrella as gross
+    var numerator=umbrella+NI_RATE*(NI_THRESH_WK/h)+P*(PENSION_LO_WK/h)*(1-NI_RATE);
+    var denominator=(1+HOL)*(1+NI_RATE*(1-P)+P+LEVY);
+    var basic=numerator/denominator;
+    var holiday=basic*HOL;
+    var totalGross=basic+holiday;
+    var pension=P*Math.max(0,totalGross-PENSION_LO_WK/h);
+    var erNi=NI_RATE*Math.max(0,totalGross-pension-NI_THRESH_WK/h);
+    var apLev=LEVY*totalGross;
+    var margin=cd>0?cd-umbrella:null;
     return{
-      basic:p,
-      wtr:parseFloat(wtr.toFixed(2)),
-      payeHol:parseFloat(payeHol.toFixed(2)),
-      erNi:parseFloat(erNi_hr.toFixed(2)),
-      apLev:parseFloat(apLev_hr.toFixed(2)),
-      pension:parseFloat(pension_hr.toFixed(2)),
-      total:parseFloat(total_hr.toFixed(2))
+      basic:parseFloat(basic.toFixed(2)),
+      wtr:parseFloat(holiday.toFixed(2)),
+      payeHol:parseFloat(totalGross.toFixed(2)),
+      pension:parseFloat(pension.toFixed(2)),
+      erNi:parseFloat(erNi.toFixed(2)),
+      apLev:parseFloat(apLev.toFixed(2)),
+      umbrella:parseFloat(umbrella.toFixed(2)),
+      margin:margin
     };
   }
   var hdrs=['Trust','Hospital','Ward/grade','Pay D','Pay N','Pay S','Charge D','Charge N','Charge S','Margin D',''];
@@ -4073,7 +4079,7 @@ function rRates(){
       var badge=live
         ?'<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:600;background:var(--grbg);color:var(--grtx)">Live</span>'
         :'<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:500;background:var(--b1);color:var(--t3)">Inactive</span>';
-      var paye=payeCalc(r.pd||0);
+      var paye=payeCalc(r.pd||0,r.cd||0);
       var inp='width:100%;padding:6px 8px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--su);color:var(--tx);font-size:12px;outline:none;box-sizing:border-box';
       var expandRow='<tr id="rate-expand-'+ri+'" style="display:none;background:var(--bg)">'
         +'<td colspan="11" style="padding:0">'
@@ -4083,11 +4089,11 @@ function rRates(){
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Basic rate</span><span>\u00a3'+paye.basic.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Holiday pay (12.07%)</span><span>\u00a3'+paye.wtr.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">PAYE incl. hol</span><span>\u00a3'+paye.payeHol.toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Pension (3%)</span><span>\u00a3'+paye.pension.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Employer NI (15%)</span><span>\u00a3'+paye.erNi.toFixed(2)+'</span></div>'
               +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Ap. levy (0.5%)</span><span>\u00a3'+paye.apLev.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--b1)"><span style="color:var(--t2)">Pension (3%)</span><span>\u00a3'+paye.pension.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;font-weight:600"><span>Total cost</span><span>\u00a3'+paye.total.toFixed(2)+'</span></div>'
-              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--grtx);font-weight:500"><span>Net margin</span><span>\u00a3'+((r.cd||0)-paye.total).toFixed(2)+'</span></div>'
+              +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;font-weight:700;border-top:1px solid var(--b2);margin-top:2px"><span>Umbrella rate</span><span>\u00a3'+paye.umbrella.toFixed(2)+'</span></div>'
+              +(paye.margin!==null?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;font-weight:600;color:'+(paye.margin>=0?'var(--grtx)':'#c0392b')+'"><span>Margin</span><span>\u00a3'+paye.margin.toFixed(2)+'</span></div>':'')
             +'</div>'
             +'<div>'
               +'<div style="font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Dates &amp; status</div>'
