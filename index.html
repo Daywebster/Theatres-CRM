@@ -5687,6 +5687,13 @@ function gp(id){
     var lcl=document.getElementById('lp-client-dlist');
     if(lcl)lcl.innerHTML=getAllTrustNames().map(function(n){return'<option value="'+esc(n)+'"></option>';}).join('');
   }
+  if(id==='shifts'){
+    loadShiftCountFromSupabase(function(){
+      loadRotaFromSupabase(function(){
+        rTable();
+      });
+    });
+  }
   if(id==='dashboard')rDash();
   if(id==='payqueries')rPQ();
   if(id==='divcon')rDivCon();
