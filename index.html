@@ -1282,14 +1282,15 @@ function oBlu(e){
       closeDD();
       return;
     }
+    /* Check for typed availability labels */
+    var typedCode={'available':'A','unavailable':'U','tbc':'T'}[v.toLowerCase()];
+    if(typedCode){setAvailability(typedCode);closeDD();return;}
     /* Only commit if the value exactly matches a valid hospital */
     var valid=v&&A.some(function(h){return h.toLowerCase()===v.toLowerCase();});
     if(valid){
-      /* normalise capitalisation to match canonical name */
       var canonical=A.find(function(h){return h.toLowerCase()===v.toLowerCase();});
       commit(i,ri,di,canonical);
     } else {
-      /* invalid -- clear the cell and flash the input red briefly */
       commit(i,ri,di,'');
       if(v){i.style.background='var(--redbg,#faeaea)';setTimeout(function(){i.style.background='';},600);}
     }
@@ -1309,8 +1310,9 @@ function oKey(e){
     /* else: multiple matches and none selected \u2014 don't commit, let user pick */
     if(ch)commit(i,ri,di,ch);
     else{
-      /* not valid \u2014 clear and flash */
       var v=i.value.trim();
+      var tCode={'available':'A','unavailable':'U','tbc':'T'}[v.toLowerCase()];
+      if(tCode){setAvailability(tCode);closeDD();return;}
       if(v&&!A.some(function(h){return h.toLowerCase()===v.toLowerCase();})){
         commit(i,ri,di,'');
         i.style.background='var(--redbg,#faeaea)';setTimeout(function(){i.style.background='';},600);
