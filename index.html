@@ -14489,7 +14489,7 @@ function _csRenderQueuesTab(){
       entries.forEach(function(c){
         var s=c.settings||{};
         var detail=q.type==='low'?(s.days_per_week||'')+(s.anywhere_uk?' \u2014 Anywhere UK':s.distance?' \u2014 Within '+s.distance+'mi':''):s.latest_call?'By '+s.latest_call:'';
-        html+='<div style="font-size:12px;color:var(--tx)">'+esc(c.candidateName)+'</div>';
+        html+='<div style="font-size:12px;color:var(--tx)">'+esc(c.name||c.candidateName||'Unknown')+'</div>';
         if(detail)html+='<div style="font-size:11px;color:var(--t3);margin-top:-2px">'+esc(detail)+'</div>';
       });
       html+='</div>';
