@@ -1625,7 +1625,13 @@ function ddP(e,idx){
 
 document.addEventListener('mousedown',function(e){
   var opt=e.target.closest('.avail-opt');
-  if(opt){e.preventDefault();setAvailability(opt.dataset.code);return;}
+  if(opt){
+    e.preventDefault();
+    ddPicking=true;  // prevent blur from clearing ac/_lastAc
+    var code=opt.dataset.code;
+    setTimeout(function(){setAvailability(code);ddPicking=false;},0);
+    return;
+  }
   if(!e.target.closest('#dd')&&!e.target.closest('.ci'))closeDD();
 });
 
@@ -15193,7 +15199,7 @@ Object.keys(ROTA_DATA.weeks).forEach(function(wk){
   ROTA_DATA.weeks[wk].dates=_dates;
 });}catch(e){}
 function setAvailability(code){
-  var inp=_lastAc||ac;
+  var inp=_lastAc||ac||document.querySelector('.ci:focus');
   if(!inp)return;
   var ri=+inp.dataset.r,di=+inp.dataset.d;
   var candName=(C[ri]&&C[ri].n)||'';
