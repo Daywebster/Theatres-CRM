@@ -14411,8 +14411,8 @@ function _csRenderShiftsTab(){
       responses.forEach(function(r){
         var sc=stageColors[r.status]||'var(--t2)';var sb=stageBgs[r.status]||'var(--su2)';
         html+='<div style="background:var(--su);border-radius:var(--r);padding:7px 9px;border:0.5px solid var(--b1)">';
-        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:11px;font-weight:600;color:var(--tx)">'+esc(r.candidateName)+'</span><span style="font-size:9px;font-weight:600;color:'+sc+';background:'+sb+';padding:1px 6px;border-radius:20px;margin-left:auto">'+(_CS_STAGE_LABELS[r.status]||r.status)+'</span></div>';
-        html+='<div style="font-size:10px;color:var(--t3);margin-bottom:5px">'+esc(r.candidatePhone)+(r.note?' \u00b7 '+esc(r.note):'')+'</div>';
+        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:11px;font-weight:600;color:var(--tx)">'+esc(r.name||r.candidateName||'Unknown')+'</span><span style="font-size:9px;font-weight:600;color:'+sc+';background:'+sb+';padding:1px 6px;border-radius:20px;margin-left:auto">'+(_CS_STAGE_LABELS[r.status]||'Interested')+'</span></div>';
+        html+='<div style="font-size:10px;color:var(--t3);margin-bottom:5px">'+esc(r.phone||r.candidatePhone||'')+(r.note?' \u00b7 '+esc(r.note):'')+'</div>';
         html+='<div style="display:flex;gap:4px;flex-wrap:wrap">';
         if(r.status!=='submitted'&&r.status!=='booked'&&r.status!=='no_longer_needed')html+='<button onclick="csSetResponseStatus(\''+s.id+'\',\''+r.id+'\',\'submitted\')" style="padding:2px 8px;border:0.5px solid var(--bl);border-radius:var(--r);background:var(--blbg);cursor:pointer;font-size:10px;color:var(--bl);font-weight:500">Submitted</button>';
         if(r.status!=='booked'&&r.status!=='no_longer_needed')html+='<button onclick="csSetResponseStatus(\''+s.id+'\',\''+r.id+'\',\'booked\')" style="padding:2px 8px;border:0.5px solid var(--grtx);border-radius:var(--r);background:var(--grbg);cursor:pointer;font-size:10px;color:var(--grtx);font-weight:500">Booked</button>';
@@ -15098,16 +15098,22 @@ function csSaveShiftModal(id,modal){
       });
     });
   }
-  // Upsert to Supabase
-  var toSave=id?[_cascadeShifts.find(function(x){return x.id===id;})]
-    :_cascadeShifts.filter(function(s){return isoDates.indexOf(s.isoDate)>=0;}).slice(0,isoDates.length);
-  toSave.forEach(function(s){if(!s)return;
+  // Upsert to Supabase — collect the shifts we just created/edited
+  var toSave=[];
+  if(id){
+    var edited=_cascadeShifts.find(function(x){return x.id===id;});
+    if(edited)toSave=[edited];
+  } else {
+    // Newly created shifts are at the front of the array, one per isoDate
+    toSave=_cascadeShifts.filter(function(s){return isoDates.indexOf(s.isoDate)>=0;});
+  }
+  toSave.forEach(function(s){
     supaFetch('POST','cascade_shifts','on_conflict=id',{
       id:s.id,role:s.role,hospital:s.hospital,ward:s.ward,shift_date:s.date,
       iso_date:s.isoDate,time_start:s.timeStart,time_end:s.timeEnd,
       postcode:s.postcode,ref:s.ref,rate:s.rate?parseFloat(s.rate):null,
       urgent:s.urgent,visible:s.visible,status:s.status,created_by:s.createdBy
-    },function(){});
+    },function(err){if(err)console.warn('Cascade shift save error:',err);});
   });
   if(modal)modal.remove();_rCascadeRender();
 }
@@ -15187,7 +15193,11 @@ function csSetResponseStatus(shiftId,responseId,newStatus){
   var s=_cascadeShifts.find(function(x){return x.id===shiftId;});if(!s)return;
   var r=(s.responses||[]).find(function(x){return x.id===responseId;});if(!r)return;
   r.status=newStatus;
-  if(newStatus==='booked'){s.status='filled';s.visible=false;}
+  if(newStatus==='booked'){s.status='filled';s.visible=false;
+    supaFetch('PATCH','cascade_shifts','id=eq.'+shiftId,{status:'filled',visible:false},function(){});
+  }
+  // Update response status in Supabase so portal can reflect it
+  supaFetch('PATCH','cascade_responses','id=eq.'+responseId,{response:newStatus},function(){});
   _rCascadeRender();
 }
 
