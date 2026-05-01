@@ -14293,18 +14293,32 @@ function csSubscribeCascadeResponses(){
   var ws2=new WebSocket(wsUrl);
   ws2.onopen=function(){
     ws2.send(JSON.stringify({topic:'realtime:public:cascade_responses',event:'phx_join',payload:{},ref:'cs1'}));
+    ws2.send(JSON.stringify({topic:'realtime:public:cascade_queues',event:'phx_join',payload:{},ref:'cs2'}));
     setInterval(function(){try{ws2.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:'hb'}));}catch(e){}},25000);
   };
   ws2.onmessage=function(e){
     try{
       var msg=JSON.parse(e.data);
-      if(msg.event==='INSERT'&&msg.payload&&msg.payload.record){
-        var r=msg.payload.record;
-        var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
+      var rec=msg.payload&&msg.payload.record;
+      if(!rec)return;
+
+      if(msg.topic==='realtime:public:cascade_responses'&&msg.event==='INSERT'){
+        var s=_cascadeShifts.find(function(x){return x.id===rec.shift_id;});
         if(s){
           s.responses=s.responses||[];
-          s.responses.unshift({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});
-          showToast('\u{1F4E9} '+r.candidate_name+' is interested in a shift');
+          s.responses.unshift({id:rec.id,name:rec.candidate_name,phone:rec.candidate_phone,response:rec.response,note:rec.note,at:rec.responded_at});
+          showToast('������ '+(rec.candidate_name||'A candidate')+' is interested in a shift');
+          if(document.getElementById('cascade-main'))_rCascadeRender();
+        }
+      }
+
+      if(msg.topic==='realtime:public:cascade_queues'){
+        if(msg.event==='INSERT'&&rec.active){
+          _cascadeQueues.push({id:rec.id,name:rec.candidate_name,phone:rec.candidate_phone,queueType:rec.queue_type,settings:rec.settings||{},active:true,createdAt:rec.created_at});
+          showToast('������ '+(rec.candidate_name||'A candidate')+' joined the queue');
+          if(document.getElementById('cascade-main'))_rCascadeRender();
+        } else if(msg.event==='DELETE'){
+          _cascadeQueues=_cascadeQueues.filter(function(q){return q.id!==rec.id;});
           if(document.getElementById('cascade-main'))_rCascadeRender();
         }
       }
