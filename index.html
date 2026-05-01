@@ -14299,10 +14299,18 @@ function csSubscribeCascadeResponses(){
   ws2.onmessage=function(e){
     try{
       var msg=JSON.parse(e.data);
-      var rec=msg.payload&&msg.payload.record;
+      // Supabase sends postgres_changes events with type inside payload
+      var evType=msg.event;
+      var rec=null;
+      if(evType==='postgres_changes'&&msg.payload&&msg.payload.data){
+        evType=msg.payload.data.type; // INSERT, UPDATE, DELETE
+        rec=msg.payload.data.record||msg.payload.data.old_record;
+      } else if(msg.payload&&msg.payload.record){
+        rec=msg.payload.record;
+      }
       if(!rec)return;
 
-      if(msg.topic==='realtime:public:cascade_responses'&&msg.event==='INSERT'){
+      if(msg.topic==='realtime:public:cascade_responses'&&evType==='INSERT'){
         var s=_cascadeShifts.find(function(x){return x.id===rec.shift_id;});
         if(s){
           s.responses=s.responses||[];
@@ -14313,11 +14321,11 @@ function csSubscribeCascadeResponses(){
       }
 
       if(msg.topic==='realtime:public:cascade_queues'){
-        if(msg.event==='INSERT'&&rec.active){
+        if(evType==='INSERT'&&rec.active){
           _cascadeQueues.push({id:rec.id,name:rec.candidate_name,phone:rec.candidate_phone,queueType:rec.queue_type,settings:rec.settings||{},active:true,createdAt:rec.created_at});
           showToast('������ '+(rec.candidate_name||'A candidate')+' joined the queue');
           if(document.getElementById('cascade-main'))_rCascadeRender();
-        } else if(msg.event==='DELETE'){
+        } else if(evType==='DELETE'){
           _cascadeQueues=_cascadeQueues.filter(function(q){return q.id!==rec.id;});
           if(document.getElementById('cascade-main'))_rCascadeRender();
         }
