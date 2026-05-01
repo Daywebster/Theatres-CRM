@@ -14243,7 +14243,74 @@ var _CS_RESPONSE_STAGES=['interested','submitted','booked','no_longer_needed'];
 var _CS_STAGE_LABELS={interested:'Interested',submitted:'Submitted',booked:'Booked',no_longer_needed:'No longer needed'};
 var _CS_STAGE_COLORS={interested:'var(--bl)',submitted:'var(--amtx)',booked:'var(--grtx)',no_longer_needed:'var(--t3)'};
 
-function rCascade(){var el=document.getElementById('cascade-main');if(!el)return;_rCascadeRender();}
+function rCascade(){
+  var el=document.getElementById('cascade-main');if(!el)return;
+  el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3);font-size:13px">Loading...</div>';
+  var loaded=0;
+  function onDone(){loaded++;if(loaded>=3)_rCascadeRender();}
+  supaFetch('GET','cascade_shifts','order=created_at.desc',null,function(err,rows){
+    if(!err&&rows){
+      _cascadeShifts=rows.map(function(r){
+        return {id:r.id,role:r.role||'',hospital:r.hospital||'',ward:r.ward||'',
+          isoDate:r.iso_date||'',date:r.shift_date||'',timeStart:r.time_start||'',timeEnd:r.time_end||'',
+          postcode:r.postcode||'',ref:r.ref||'',rate:r.rate||null,urgent:!!r.urgent,
+          visible:!!r.visible,status:r.status||'open',createdBy:r.created_by||'',
+          createdAt:r.created_at||'',responses:[]};
+      });
+      supaFetch('GET','cascade_responses','order=responded_at.desc',null,function(e2,resp){
+        if(!e2&&resp){
+          resp.forEach(function(r){
+            var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
+            if(s){s.responses=s.responses||[];s.responses.push({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});}
+          });
+        }
+        onDone();
+      });
+    } else { onDone(); }
+  });
+  supaFetch('GET','cascade_lines','order=created_at.desc',null,function(err,rows){
+    if(!err&&rows){
+      _cascadeLines=rows.map(function(r){
+        return {id:r.id,role:r.role||'',hospital:r.hospital||'',daysPerWeek:r.days_per_week||'',
+          length:r.length||'',rate:r.rate||null,visible:!!r.visible,status:r.status||'open',
+          createdBy:r.created_by||'',createdAt:r.created_at||'',responses:[]};
+      });
+    }
+    onDone();
+  });
+  supaFetch('GET','cascade_queues','active=eq.true&order=created_at.desc',null,function(err,rows){
+    if(!err&&rows){_cascadeQueues=rows.map(function(r){return {id:r.id,name:r.candidate_name,phone:r.candidate_phone,queueType:r.queue_type,settings:r.settings||{},active:!!r.active,createdAt:r.created_at};});}
+    onDone();
+  });
+  csSubscribeCascadeResponses();
+}
+
+var _csResponseSubbed=false;
+function csSubscribeCascadeResponses(){
+  if(_csResponseSubbed)return;
+  _csResponseSubbed=true;
+  var wsUrl=SUPA_URL.replace('https','wss').replace('http','ws')+'/realtime/v1/websocket?vsn=1.0.0&apikey='+SUPA_KEY;
+  var ws2=new WebSocket(wsUrl);
+  ws2.onopen=function(){
+    ws2.send(JSON.stringify({topic:'realtime:public:cascade_responses',event:'phx_join',payload:{},ref:'cs1'}));
+    setInterval(function(){try{ws2.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:'hb'}));}catch(e){}},25000);
+  };
+  ws2.onmessage=function(e){
+    try{
+      var msg=JSON.parse(e.data);
+      if(msg.event==='INSERT'&&msg.payload&&msg.payload.record){
+        var r=msg.payload.record;
+        var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
+        if(s){
+          s.responses=s.responses||[];
+          s.responses.unshift({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});
+          showToast('\u{1F4E9} '+r.candidate_name+' is interested in a shift');
+          if(document.getElementById('cascade-main'))_rCascadeRender();
+        }
+      }
+    }catch(e){}
+  };
+}
 
 function _rCascadeRender(){
   var el=document.getElementById('cascade-main');if(!el)return;
@@ -15031,6 +15098,23 @@ function csSaveShiftModal(id,modal){
       });
     });
   }
+  // Upsert to Supabase — collect the shifts we just created/edited
+  var toSave=[];
+  if(id){
+    var edited=_cascadeShifts.find(function(x){return x.id===id;});
+    if(edited)toSave=[edited];
+  } else {
+    // Newly created shifts are at the front of the array, one per isoDate
+    toSave=_cascadeShifts.filter(function(s){return isoDates.indexOf(s.isoDate)>=0;});
+  }
+  toSave.forEach(function(s){
+    supaFetch('POST','cascade_shifts','on_conflict=id',{
+      id:s.id,role:s.role,hospital:s.hospital,ward:s.ward,shift_date:s.date,
+      iso_date:s.isoDate,time_start:s.timeStart,time_end:s.timeEnd,
+      postcode:s.postcode,ref:s.ref,rate:s.rate?parseFloat(s.rate):null,
+      urgent:s.urgent,visible:s.visible,status:s.status,created_by:s.createdBy
+    },function(err){if(err)console.warn('Cascade shift save error:',err);});
+  });
   if(modal)modal.remove();_rCascadeRender();
 }
 
@@ -15067,13 +15151,20 @@ function csSaveLineModal(id,modal){
   if(!role||!hosp){alert('Role and hospital are required');return;}
   if(id){var l=_cascadeLines.find(function(x){return x.id===id;});if(l){l.role=role;l.hospital=hosp;l.daysPerWeek=days;l.length=length;l.rate=rate||null;l.visible=visible;}}
   else{_cascadeLines.unshift({id:'cl'+Date.now(),role:role,hospital:hosp,daysPerWeek:days,length:length,rate:rate||null,visible:visible,status:'open',createdBy:_todoConsultant||'',responses:[],createdAt:todayStr()});}
+  // Upsert line to Supabase
+  var lSave=id?_cascadeLines.find(function(x){return x.id===id;}):_cascadeLines[0];
+  if(lSave){supaFetch('POST','cascade_lines','on_conflict=id',{
+    id:lSave.id,role:lSave.role,hospital:lSave.hospital,days_per_week:lSave.daysPerWeek,
+    length:lSave.length,rate:lSave.rate?parseFloat(lSave.rate):null,
+    visible:lSave.visible,status:lSave.status,created_by:lSave.createdBy
+  },function(){});}
   if(modal)modal.remove();_rCascadeRender();
 }
 
-function csToggleVisible(id){var s=_cascadeShifts.find(function(x){return x.id===id;});if(s)s.visible=!s.visible;_rCascadeRender();}
-function csToggleLineVisible(id){var l=_cascadeLines.find(function(x){return x.id===id;});if(l)l.visible=!l.visible;_rCascadeRender();}
-function csCancelShift(id){if(!confirm('Cancel this shift?'))return;var s=_cascadeShifts.find(function(x){return x.id===id;});if(s){s.status='cancelled';s.visible=false;}_rCascadeRender();}
-function csDeleteLine(id){if(!confirm('Delete this line of work?'))return;_cascadeLines=_cascadeLines.filter(function(x){return x.id!==id;});_rCascadeRender();}
+function csToggleVisible(id){var s=_cascadeShifts.find(function(x){return x.id===id;});if(s){s.visible=!s.visible;supaFetch('PATCH','cascade_shifts','id=eq.'+id,{visible:s.visible},function(){});}  _rCascadeRender();}
+function csToggleLineVisible(id){var l=_cascadeLines.find(function(x){return x.id===id;});if(l){l.visible=!l.visible;supaFetch('PATCH','cascade_lines','id=eq.'+id,{visible:l.visible},function(){});}_rCascadeRender();}
+function csCancelShift(id){if(!confirm('Cancel this shift?'))return;var s=_cascadeShifts.find(function(x){return x.id===id;});if(s){s.status='cancelled';s.visible=false;supaFetch('PATCH','cascade_shifts','id=eq.'+id,{status:'cancelled',visible:false},function(){});}_rCascadeRender();}
+function csDeleteLine(id){if(!confirm('Delete this line of work?'))return;supaFetch('DELETE','cascade_lines','id=eq.'+id,null,function(){});_cascadeLines=_cascadeLines.filter(function(x){return x.id!==id;});_rCascadeRender();}
 
 function csAssignCandidate(shiftId,name){
   var s=_cascadeShifts.find(function(x){return x.id===shiftId;});if(!s)return;
