@@ -1582,8 +1582,16 @@ function commit(i,ri,di,v){
       }
     }
   }
-  if(v){wd[ri][di]=v;i.value=v;i.classList.add('f');}
-  else{delete wd[ri][di];i.value='';i.classList.remove('f');}
+  if(v){
+    wd[ri][di]=v;i.value=v;i.classList.add('f');
+    // Apply colour if hospital booking
+    if(v!=='A'&&v!=='U'&&v!=='T'){
+      i.style.background='#43a047';i.style.color='#fff';i.style.fontWeight='600';i.style.fontStyle='';
+    }
+  } else {
+    delete wd[ri][di];i.value='';i.classList.remove('f');
+    i.style.background='';i.style.color='';i.style.fontWeight='';i.style.fontStyle='';
+  }
   // Sync to rota
   var wk2=wKey(wkOff);
   syncShiftToRota(wk2,ri,di,v);
@@ -1632,12 +1640,13 @@ function ddP(e,idx){
   if(!ac){ddPicking=false;return;}
   var ri=+ac.dataset.r,di=+ac.dataset.d,inp=ac;
   var val=dm[idx];
-  // Hospital booking — show as green
+  commit(inp,ri,di,val);
+  // Apply green after commit for hospital bookings
   if(val&&val!=='A'&&val!=='U'&&val!=='T'){
     inp.style.background='#43a047';inp.style.color='#fff';inp.style.fontWeight='600';
+    inp.style.fontStyle='';
     delete inp.dataset.avcode;
   }
-  commit(inp,ri,di,val);
   closeDD();
   ddPicking=false;
   var ni=di<6?gI(ri,di+1):gI(Math.min(ri+1,C.length-1),0);
