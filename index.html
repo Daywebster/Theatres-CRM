@@ -1482,11 +1482,15 @@ function getCellForRota(wk, trustName, candIdx, dayIdx, candName){
   // Returns {val, encoded} where val is display value and encoded is 'A'/'U'/site/''
   var shiftVal=(sd[wk]&&sd[wk][candIdx])?sd[wk][candIdx][dayIdx]||'':'';
   if(shiftVal){
+    // A/U/T flags show on ALL trust rotas
+    if(shiftVal==='A'||shiftVal==='U'||shiftVal==='T'){
+      return{val:shiftVal, encoded:shiftVal};
+    }
     var shiftTrust=getTrust(shiftVal);
     if(shiftTrust===trustName){
       return{val:shiftVal, encoded:shiftVal}; // booked at this trust
     } else {
-      return{val:'U', encoded:'U'}; // booked elsewhere = unavailable
+      return{val:'', encoded:''}; // booked elsewhere — blank on other rotas
     }
   }
   // No booking in sd - check manual rota override (keyed by candidate name)
