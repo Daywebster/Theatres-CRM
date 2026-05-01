@@ -14247,7 +14247,22 @@ function rCascade(){
   var el=document.getElementById('cascade-main');if(!el)return;
   el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3);font-size:13px">Loading...</div>';
   var loaded=0;
-  function onDone(){loaded++;if(loaded>=3)_rCascadeRender();}
+  var _pendingResponses=[];
+  function onDone(){
+    loaded++;
+    if(loaded>=3){
+      // All shifts/lines/queues loaded - now attach responses
+      _pendingResponses.forEach(function(r){
+        var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
+        if(s){s.responses=s.responses||[];s.responses.push({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});}
+      });
+      _rCascadeRender();
+    }
+  }
+  // Fetch responses first into a holding array
+  supaFetch('GET','cascade_responses','order=responded_at.desc',null,function(e,resp){
+    if(!e&&resp)_pendingResponses=resp;
+  });
   supaFetch('GET','cascade_shifts','order=created_at.desc',null,function(err,rows){
     if(!err&&rows){
       _cascadeShifts=rows.map(function(r){
@@ -14256,17 +14271,8 @@ function rCascade(){
           postcode:r.postcode||'',ref:r.ref||'',rate:r.rate||null,urgent:!!r.urgent,
           visible:!!r.visible,status:r.status||'open',createdBy:r.created_by||'',
           createdAt:r.created_at||'',responses:[]};
-      });
-      supaFetch('GET','cascade_responses','order=responded_at.desc',null,function(e2,resp){
-        if(!e2&&resp){
-          resp.forEach(function(r){
-            var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
-            if(s){s.responses=s.responses||[];s.responses.push({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});}
-          });
-        }
-        onDone();
-      });
-    } else { onDone(); }
+    });}
+    onDone();
   });
   supaFetch('GET','cascade_lines','order=created_at.desc',null,function(err,rows){
     if(!err&&rows){
@@ -14293,18 +14299,40 @@ function csSubscribeCascadeResponses(){
   var ws2=new WebSocket(wsUrl);
   ws2.onopen=function(){
     ws2.send(JSON.stringify({topic:'realtime:public:cascade_responses',event:'phx_join',payload:{},ref:'cs1'}));
+    ws2.send(JSON.stringify({topic:'realtime:public:cascade_queues',event:'phx_join',payload:{},ref:'cs2'}));
     setInterval(function(){try{ws2.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:'hb'}));}catch(e){}},25000);
   };
   ws2.onmessage=function(e){
     try{
       var msg=JSON.parse(e.data);
-      if(msg.event==='INSERT'&&msg.payload&&msg.payload.record){
-        var r=msg.payload.record;
-        var s=_cascadeShifts.find(function(x){return x.id===r.shift_id;});
+      // Supabase sends postgres_changes events with type inside payload
+      var evType=msg.event;
+      var rec=null;
+      if(evType==='postgres_changes'&&msg.payload&&msg.payload.data){
+        evType=msg.payload.data.type; // INSERT, UPDATE, DELETE
+        rec=msg.payload.data.record||msg.payload.data.old_record;
+      } else if(msg.payload&&msg.payload.record){
+        rec=msg.payload.record;
+      }
+      if(!rec)return;
+
+      if(msg.topic==='realtime:public:cascade_responses'&&evType==='INSERT'){
+        var s=_cascadeShifts.find(function(x){return x.id===rec.shift_id;});
         if(s){
           s.responses=s.responses||[];
-          s.responses.unshift({id:r.id,name:r.candidate_name,phone:r.candidate_phone,response:r.response,note:r.note,at:r.responded_at});
-          showToast('\u{1F4E9} '+r.candidate_name+' is interested in a shift');
+          s.responses.unshift({id:rec.id,name:rec.candidate_name,phone:rec.candidate_phone,response:rec.response,note:rec.note,at:rec.responded_at});
+          showToast('������ '+(rec.candidate_name||'A candidate')+' is interested in a shift');
+          if(document.getElementById('cascade-main'))_rCascadeRender();
+        }
+      }
+
+      if(msg.topic==='realtime:public:cascade_queues'){
+        if(evType==='INSERT'&&rec.active){
+          _cascadeQueues.push({id:rec.id,name:rec.candidate_name,phone:rec.candidate_phone,queueType:rec.queue_type,settings:rec.settings||{},active:true,createdAt:rec.created_at});
+          showToast('������ '+(rec.candidate_name||'A candidate')+' joined the queue');
+          if(document.getElementById('cascade-main'))_rCascadeRender();
+        } else if(evType==='DELETE'){
+          _cascadeQueues=_cascadeQueues.filter(function(q){return q.id!==rec.id;});
           if(document.getElementById('cascade-main'))_rCascadeRender();
         }
       }
@@ -14411,8 +14439,8 @@ function _csRenderShiftsTab(){
       responses.forEach(function(r){
         var sc=stageColors[r.status]||'var(--t2)';var sb=stageBgs[r.status]||'var(--su2)';
         html+='<div style="background:var(--su);border-radius:var(--r);padding:7px 9px;border:0.5px solid var(--b1)">';
-        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:11px;font-weight:600;color:var(--tx)">'+esc(r.candidateName)+'</span><span style="font-size:9px;font-weight:600;color:'+sc+';background:'+sb+';padding:1px 6px;border-radius:20px;margin-left:auto">'+(_CS_STAGE_LABELS[r.status]||r.status)+'</span></div>';
-        html+='<div style="font-size:10px;color:var(--t3);margin-bottom:5px">'+esc(r.candidatePhone)+(r.note?' \u00b7 '+esc(r.note):'')+'</div>';
+        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:11px;font-weight:600;color:var(--tx)">'+esc(r.name||r.candidateName||'Unknown')+'</span><span style="font-size:9px;font-weight:600;color:'+sc+';background:'+sb+';padding:1px 6px;border-radius:20px;margin-left:auto">'+(_CS_STAGE_LABELS[r.status]||'Interested')+'</span></div>';
+        html+='<div style="font-size:10px;color:var(--t3);margin-bottom:5px">'+esc(r.phone||r.candidatePhone||'')+(r.note?' \u00b7 '+esc(r.note):'')+'</div>';
         html+='<div style="display:flex;gap:4px;flex-wrap:wrap">';
         if(r.status!=='submitted'&&r.status!=='booked'&&r.status!=='no_longer_needed')html+='<button onclick="csSetResponseStatus(\''+s.id+'\',\''+r.id+'\',\'submitted\')" style="padding:2px 8px;border:0.5px solid var(--bl);border-radius:var(--r);background:var(--blbg);cursor:pointer;font-size:10px;color:var(--bl);font-weight:500">Submitted</button>';
         if(r.status!=='booked'&&r.status!=='no_longer_needed')html+='<button onclick="csSetResponseStatus(\''+s.id+'\',\''+r.id+'\',\'booked\')" style="padding:2px 8px;border:0.5px solid var(--grtx);border-radius:var(--r);background:var(--grbg);cursor:pointer;font-size:10px;color:var(--grtx);font-weight:500">Booked</button>';
@@ -14489,7 +14517,7 @@ function _csRenderQueuesTab(){
       entries.forEach(function(c){
         var s=c.settings||{};
         var detail=q.type==='low'?(s.days_per_week||'')+(s.anywhere_uk?' \u2014 Anywhere UK':s.distance?' \u2014 Within '+s.distance+'mi':''):s.latest_call?'By '+s.latest_call:'';
-        html+='<div style="font-size:12px;color:var(--tx)">'+esc(c.candidateName)+'</div>';
+        html+='<div style="font-size:12px;color:var(--tx)">'+esc(c.name||c.candidateName||'Unknown')+'</div>';
         if(detail)html+='<div style="font-size:11px;color:var(--t3);margin-top:-2px">'+esc(detail)+'</div>';
       });
       html+='</div>';
@@ -15193,7 +15221,11 @@ function csSetResponseStatus(shiftId,responseId,newStatus){
   var s=_cascadeShifts.find(function(x){return x.id===shiftId;});if(!s)return;
   var r=(s.responses||[]).find(function(x){return x.id===responseId;});if(!r)return;
   r.status=newStatus;
-  if(newStatus==='booked'){s.status='filled';s.visible=false;}
+  if(newStatus==='booked'){s.status='filled';s.visible=false;
+    supaFetch('PATCH','cascade_shifts','id=eq.'+shiftId,{status:'filled',visible:false},function(){});
+  }
+  // Update response status in Supabase so portal can reflect it
+  supaFetch('PATCH','cascade_responses','id=eq.'+responseId,{response:newStatus},function(){});
   _rCascadeRender();
 }
 
