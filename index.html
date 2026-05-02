@@ -14378,6 +14378,72 @@ function _rCascadeRender(){
 function csSwitchTab(tab){_cascadeTab=tab;_rCascadeRender();}
 
 function csSetFilter(f){_csFilter=f;_rCascadeRender();}
+
+// ── CALENDAR PILL CONTEXT MENU ────────────────────────────────────────────
+var _csPillActiveId=null;
+function csPillMenu(e,sid){
+  e.preventDefault();
+  e.stopPropagation();
+  _csPillActiveId=sid;
+  var menu=document.getElementById('csPillCtxMenu');
+  menu.style.display='block';
+  var x=e.clientX, y=e.clientY;
+  if(x+170>window.innerWidth) x=window.innerWidth-175;
+  if(y+80>window.innerHeight) y=window.innerHeight-85;
+  menu.style.left=x+'px';
+  menu.style.top=y+'px';
+}
+function csPillMenuEdit(){
+  document.getElementById('csPillCtxMenu').style.display='none';
+  if(_csPillActiveId) csEditShift(_csPillActiveId);
+}
+function csPillMenuResponses(){
+  document.getElementById('csPillCtxMenu').style.display='none';
+  if(!_csPillActiveId) return;
+  var s=_cascadeShifts.find(function(x){return x.id===_csPillActiveId;});
+  if(!s) return;
+  var responses=s.responses||[];
+  var title=document.getElementById('csPillRespTitle');
+  title.textContent=(s.role||'')+(s.hospital?' — '+s.hospital:'');
+  var body=document.getElementById('csPillRespBody');
+  var stageColors={interested:'var(--amtx)',submitted:'var(--bl)',booked:'var(--grtx)',no_longer_needed:'var(--t3)'};
+  var stageBgs={interested:'var(--ambg)',submitted:'var(--blbg)',booked:'var(--grbg)',no_longer_needed:'var(--su2)'};
+  var stageLabels={interested:'Interested',submitted:'Submitted',booked:'Booked',no_longer_needed:'Not needed'};
+  if(!responses.length){
+    body.innerHTML='<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">No portal responses yet</div>';
+  } else {
+    body.innerHTML=responses.map(function(r){
+      var sc=stageColors[r.response||r.status]||'var(--t2)';
+      var sb=stageBgs[r.response||r.status]||'var(--su2)';
+      var sl=stageLabels[r.response||r.status]||'Interested';
+      var at=r.at?new Date(r.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+      return '<div style="padding:8px 0;border-bottom:0.5px solid var(--b1)">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">'
+        +'<span style="font-size:12px;font-weight:600;color:var(--tx)">'+esc(r.name||'Unknown')+'</span>'
+        +'<span style="font-size:10px;font-weight:600;color:'+sc+';background:'+sb+';padding:1px 7px;border-radius:20px">'+sl+'</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:var(--t3)">'+(r.phone||'')+(at?' · '+at:'')+'</div>'
+        +(r.note?'<div style="font-size:11px;color:var(--t2);margin-top:2px">'+esc(r.note)+'</div>':'')
+        +'<div style="display:flex;gap:4px;margin-top:5px">'
+        +(r.response!=='submitted'&&r.response!=='booked'&&r.response!=='no_longer_needed'?'<button data-sid="'+s.id+'" data-rid="'+r.id+'" data-st="submitted" onclick="csSetResponseStatus(this.dataset.sid,this.dataset.rid,this.dataset.st);csPillRespClose()" style="padding:2px 8px;border:0.5px solid var(--bl);border-radius:var(--r);background:var(--blbg);cursor:pointer;font-size:10px;color:var(--bl);font-weight:500">Submitted</button>':'')
+        +(r.response!=='booked'&&r.response!=='no_longer_needed'?'<button data-sid="'+s.id+'" data-rid="'+r.id+'" data-st="booked" onclick="csSetResponseStatus(this.dataset.sid,this.dataset.rid,this.dataset.st);csPillRespClose()" style="padding:2px 8px;border:0.5px solid var(--grtx);border-radius:var(--r);background:var(--grbg);cursor:pointer;font-size:10px;color:var(--grtx);font-weight:500">Booked</button>':'')
+        +(r.response!=='no_longer_needed'?'<button data-sid="'+s.id+'" data-rid="'+r.id+'" data-st="no_longer_needed" onclick="csSetResponseStatus(this.dataset.sid,this.dataset.rid,this.dataset.st);csPillRespClose()" style="padding:2px 8px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:10px;color:var(--t3)">Not needed</button>':'')
+        +'</div></div>';
+    }).join('');
+  }
+  var panel=document.getElementById('csPillRespPanel');
+  panel.style.display='block';
+  panel.style.left='50%';
+  panel.style.top='50%';
+  panel.style.transform='translate(-50%,-50%)';
+}
+function csPillRespClose(){
+  document.getElementById('csPillRespPanel').style.display='none';
+}
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('csPillCtxMenu');
+  if(menu&&!menu.contains(e.target)) menu.style.display='none';
+});
 function csSetView(v){_csView=v;_rCascadeRender();}
 
 function _csRenderCalendar(shifts,candNames,stageColors,stageBgs){
@@ -14426,7 +14492,7 @@ function _csRenderCalendar(shifts,candNames,stageColors,stageBgs){
       var hasSubmitted=(s.responses||[]).some(function(r){return r.response==='submitted';});
       var dotColor=hasBooked?'var(--grtx)':hasSubmitted?'var(--bl)':isLive?'var(--amtx)':'var(--t3)';
       var bg=hasBooked?'var(--grbg)':hasSubmitted?'var(--blbg)':isLive?'var(--ambg)':'var(--su2)';
-            html+='<div onclick="csEditShift(&quot;'+s.id+'&quot;)" style="background:'+bg+';border-radius:4px;padding:3px 5px;margin-bottom:2px;cursor:pointer;border-left:2px solid '+dotColor+'">';
+            html+='<div data-sid="'+s.id+'" oncontextmenu="csPillMenu(event,this.dataset.sid)" style="background:'+bg+';border-radius:4px;padding:3px 5px;margin-bottom:2px;cursor:context-menu;border-left:2px solid '+dotColor+'">';
       html+='<div style="font-size:10px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.role)+'</div>';
       html+='<div style="font-size:9px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.hospital)+'</div>';
       if(s.timeStart)html+='<div style="font-size:9px;color:var(--t3)">'+esc(s.timeStart)+'–'+esc(s.timeEnd)+'</div>';
@@ -15587,6 +15653,22 @@ var _lastAc=null;
   <div style="margin-top:12px;padding-top:16px;border-top:0.5px solid var(--b1)">
     <button onclick="resetHotkeys()" style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:12px;color:var(--t3)">Reset to defaults</button>
   </div>
+</div>
+<div id="csPillCtxMenu" style="display:none;position:fixed;z-index:9999;background:var(--su);border:0.5px solid var(--b2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;min-width:160px;font-size:12px">
+  <div id="csPillCtxEdit" onclick="csPillMenuEdit()" style="padding:7px 12px;border-radius:5px;cursor:pointer;color:var(--tx);display:flex;align-items:center;gap:8px">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>Edit shift
+  </div>
+  <div id="csPillCtxResp" onclick="csPillMenuResponses()" style="padding:7px 12px;border-radius:5px;cursor:pointer;color:var(--tx);display:flex;align-items:center;gap:8px">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M4 6h4M6 4v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Responses
+  </div>
+</div>
+
+<div id="csPillRespPanel" style="display:none;position:fixed;z-index:9998;background:var(--su);border:0.5px solid var(--b2);border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.18);padding:0;min-width:280px;max-width:340px;max-height:400px;overflow-y:auto">
+  <div style="padding:12px 14px;border-bottom:0.5px solid var(--b1);display:flex;align-items:center;justify-content:space-between">
+    <div id="csPillRespTitle" style="font-size:12px;font-weight:600;color:var(--tx)"></div>
+    <button onclick="csPillRespClose()" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;padding:0 2px">&times;</button>
+  </div>
+  <div id="csPillRespBody" style="padding:10px 14px"></div>
 </div>
 </body>
 </html>
