@@ -20551,7 +20551,7 @@ var _rexNudges = [];
 var _rexScanning = false;
 var _rexApiKey = localStorage.getItem('rex_api_key')||'AIzaSyAsE_kGi11MD6XlmuhyCrGKZdcrFhiYQ_w';
 var _rexLastScan = 0;
-var _GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+var _GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=';
 
 // ── Toggle panel ────────────────────────────────────────────────────────────
 function rexToggle(){
@@ -20560,19 +20560,7 @@ function rexToggle(){
   if(panel){panel.style.display = _rexOpen ? 'flex' : 'none';}
   if(_rexOpen){
     rexScan();
-    // Auto-brief on first open of the day
-    var lastBrief = localStorage.getItem('rex_last_brief')||'';
-    var todayStr = new Date().toISOString().slice(0,10);
-    if(lastBrief !== todayStr && _rexMessages.length === 0){
-      localStorage.setItem('rex_last_brief', todayStr);
-      setTimeout(function(){
-        var key=_rexApiKey||localStorage.getItem('rex_api_key')||'';
-        if(key){
-          rexShowTyping();
-          rexCallGemini('Give me a quick briefing on the desk. What needs my attention today? Be brief — 3-4 bullet points max.',key);
-        }
-      }, 800);
-    }
+    // Auto-brief disabled - user can ask "What needs doing today?" manually
     setTimeout(function(){
       var inp = document.getElementById('rex-input');
       if(inp)inp.focus();
