@@ -20549,9 +20549,9 @@ var _rexOpen = false;
 var _rexMessages = []; // {role, text, ts, actions}
 var _rexNudges = [];
 var _rexScanning = false;
-var _rexApiKey = localStorage.getItem('rex_api_key')||'AIzaSyAsE_kGi11MD6XlmuhyCrGKZdcrFhiYQ_w';
+var _rexApiKey = 'via-supabase'; // Key stored securely in Supabase Edge Function
 var _rexLastScan = 0;
-var _GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=';
+var _GEMINI_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co/functions/v1/smooth-api?action=gemini';
 
 // ── Toggle panel ────────────────────────────────────────────────────────────
 function rexToggle(){
@@ -20963,10 +20963,8 @@ function rexSend(){
   var qp=document.getElementById('rex-quick-prompts');
   if(qp)qp.style.display='none';
 
-  var key=_rexApiKey||localStorage.getItem('rex_api_key')||'';
-  if(!key){rexShowApiKeyPrompt();return;}
   rexShowTyping();
-  rexCallGemini(text,key);
+  rexCallGemini(text,'');
 }
 
 function rexShowApiKeyPrompt(){
@@ -20987,7 +20985,7 @@ function rexShowApiKeyPrompt(){
 }
 
 // ── GEMINI API CALL ──────────────────────────────────────────────────────────
-function rexCallGemini(userMessage, apiKey){
+function rexCallGemini(userMessage){
   var ctx = rexBuildContext();
   var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: describe exactly what you will do and wait for confirmation. Never assume rates, times or roles.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx;
 
@@ -20999,9 +20997,13 @@ function rexCallGemini(userMessage, apiKey){
     messages.push({role:m.role==='user'?'user':'model',parts:[{text:m.text}]});
   });
 
-  fetch(_GEMINI_URL+apiKey,{
+  fetch(_GEMINI_URL,{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+      'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+    },
     body:JSON.stringify({
       contents:[{role:'user',parts:[{text:systemPrompt+'\n\n'+_rexMessages.slice(-6).map(function(m){return (m.role==='user'?'User':'Rex')+': '+m.text;}).join('\n')+'\nUser: '+userMessage}]}],
       generationConfig:{temperature:0.7,maxOutputTokens:600}
