@@ -21012,16 +21012,20 @@ function rexCallGemini(userMessage){
   .then(function(r){return r.json();})
   .then(function(data){
     rexHideTyping();
+    console.log('Rex response:', JSON.stringify(data).slice(0,200));
     if(data.candidates&&data.candidates[0]&&data.candidates[0].content){
       var reply=data.candidates[0].content.parts[0].text||'';
       rexAddMessage('rex',reply);
     } else if(data.error){
-      rexAddMessage('rex','Something went wrong: '+( data.error.message||'Unknown error'));
+      rexAddMessage('rex','Something went wrong: '+(data.error.message||JSON.stringify(data.error)));
+    } else {
+      rexAddMessage('rex','Unexpected response. Check console.');
+      console.error('Rex unexpected:', data);
     }
   })
   .catch(function(e){
     rexHideTyping();
-    rexAddMessage('rex','Connection issue. Check your API key and try again.');
+    rexAddMessage('rex','Connection issue: '+e.message);
     console.error('Rex API error:',e);
   });
 }
