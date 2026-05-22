@@ -21393,7 +21393,8 @@ function rexExecuteCreateTask(action){
     created_date: new Date().toISOString().slice(0,10),
     created_by: (_currentUser&&_currentUser.name)||'Rex'
   };
-  supaFetch('POST','tasks_crm','',supaBody,function(err, rows){
+  // Do not send id — let Supabase generate a UUID
+  supaFetch('POST','tasks_crm','select=id',supaBody,function(err, rows){
     if(err){
       console.error('Rex create_task error [REX-004]:', err);
       rexAddMessage('rex','Failed to create the task (**Error REX-004**). Please speak to Josh to sort this.');
