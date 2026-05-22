@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Atlas v128</title>
+<title>Atlas v130</title>
 <style>
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.live-dot{animation:pulse 2s infinite}
 :root{
@@ -50,6 +50,7 @@ nav::-webkit-scrollbar{display:none}
 .nav-group .ntab:hover{color:rgba(255,255,255,0.9)}
 .nav-group .ntab.on{color:#fff}
 .chat-msg-wrap:hover .chat-msg-actions{opacity:1!important;}
+@keyframes rex-dot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
 /* top-level pinned items */
 .ntab-top{font-size:13px;font-weight:600;color:#ffffff;height:34px;justify-content:space-between;padding-right:12px}
 .ntab-top:hover{color:#fff;background:rgba(255,255,255,0.07)}
@@ -5154,23 +5155,34 @@ function loadRotaFromSupabase(callback){
 
 // Load shift count from Supabase and merge into sd
 function loadShiftCountFromSupabase(callback){
-  supaFetch('GET', 'shift_count', 'select=week_start,candidate_name,mon,tue,wed,thu,fri,sat,sun', null, function(err, rows){
-    if(err || !rows || !rows.length){ if(callback)callback(); return; }
-    // Clear localStorage sd so Supabase is sole source of truth
-    Object.keys(sd).forEach(function(k){ delete sd[k]; });
-    rows.forEach(function(row){
-      var wk = row.week_start;
-      var candIdx = getCandIdx(row.candidate_name);
-      if(candIdx < 0) return;
-      if(!sd[wk]) sd[wk] = {};
-      var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
-      var dayMap = {};
-      days.forEach(function(v,i){ if(v) dayMap[i] = v; });
-      if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
+  // Ensure candidates are loaded first so getCandIdx works reliably
+  function doLoad(){
+    supaFetch('GET', 'shift_count', 'select=week_start,candidate_name,mon,tue,wed,thu,fri,sat,sun', null, function(err, rows){
+      if(err || !rows || !rows.length){ if(callback)callback(); return; }
+      // Clear sd so Supabase is sole source of truth
+      Object.keys(sd).forEach(function(k){ delete sd[k]; });
+      var skipped = 0;
+      rows.forEach(function(row){
+        var wk = row.week_start;
+        var candIdx = getCandIdx(row.candidate_name);
+        if(candIdx < 0){ skipped++; return; }
+        if(!sd[wk]) sd[wk] = {};
+        var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
+        var dayMap = {};
+        days.forEach(function(v,i){ if(v) dayMap[i] = v; });
+        if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
+      });
+      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]');
+      console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
+      if(callback) callback();
     });
-    console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
-    if(callback) callback();
-  });
+  }
+  // If candidates not yet loaded, load them first
+  if(!_supaLoaded || C.length === 0){
+    loadCandidatesFromSupabase(function(){ doLoad(); });
+  } else {
+    doLoad();
+  }
 }
 
 // ── DW Candidate ID helpers ──────────────────────────────────────────────────────────────
@@ -20538,7 +20550,774 @@ function nlSaveNotes(id){
 }
 
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REX — Atlas AI Assistant
+// Phase 1: Automation scanner + nudge system + chat shell
+// ═══════════════════════════════════════════════════════════════════════════
+
+var _rexOpen = false;
+var _rexMessages = []; // {role, text, ts, actions}
+var _rexNudges = [];
+var _rexScanning = false;
+var _rexApiKey = 'via-supabase'; // Key stored securely in Supabase Edge Function
+var _rexLastScan = 0;
+var _GEMINI_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co/functions/v1/smooth-api?action=gemini';
+
+// ── Toggle panel ────────────────────────────────────────────────────────────
+function rexToggle(){
+  _rexOpen = !_rexOpen;
+  var panel = document.getElementById('rex-panel');
+  if(panel){panel.style.display = _rexOpen ? 'flex' : 'none';}
+  if(_rexOpen){
+    rexScan();
+    // Auto-brief disabled - user can ask "What needs doing today?" manually
+    setTimeout(function(){
+      var inp = document.getElementById('rex-input');
+      if(inp)inp.focus();
+    }, 100);
+  }
+}
+
+// ── Quick prompt ────────────────────────────────────────────────────────────
+function rexQuickPrompt(text){
+  var inp = document.getElementById('rex-input');
+  if(inp){inp.value = text;}
+  rexSend();
+}
+
+// ── Key handler ─────────────────────────────────────────────────────────────
+function rexKeyDown(e){
+  if(e.key === 'Enter' && !e.shiftKey){e.preventDefault();rexSend();}
+}
+
+// ── AUTOMATION SCANNER ──────────────────────────────────────────────────────
+// Runs deterministic rules — no AI needed, instant, free
+function rexScan(){
+  if(_rexScanning)return;
+  _rexScanning = true;
+  _rexNudges = [];
+  var now = new Date();
+  var todayStr = now.toISOString().slice(0,10);
+  var tomorrowD = new Date(now); tomorrowD.setDate(now.getDate()+1);
+  var tomorrowStr = tomorrowD.toISOString().slice(0,10);
+  var in48h = new Date(now.getTime() + 48*60*60*1000).toISOString();
+
+  // ── 1. Overdue tasks ──────────────────────────────────────────────────────
+  var myName = (_currentUser && _currentUser.name) || '';
+  var overdueTasks = _tasks.filter(function(t){
+    if(t.done)return false;
+    if(myName && t.consultant && t.consultant !== myName)return false;
+    var due = t.due_date || t.dueDate || '';
+    return due && due < todayStr;
+  });
+  if(overdueTasks.length){
+    _rexNudges.push({
+      priority: 1,
+      icon: '&#9888;',
+      col: '#ef4444',
+      bg: '#fef2f2',
+      title: overdueTasks.length + ' overdue task' + (overdueTasks.length>1?'s':''),
+      body: overdueTasks.slice(0,2).map(function(t){return t.note||t.type||'Task';}).join(' &middot; '),
+      action: {label:'View tasks', fn:'gp("todo")'}
+    });
+  }
+
+  // ── 2. Tasks not actioned in 48h ─────────────────────────────────────────
+  var stale = _tasks.filter(function(t){
+    if(t.done)return false;
+    if(myName && t.consultant && t.consultant !== myName)return false;
+    var created = t.createdAt || t.created_at || '';
+    var due = t.due_date || t.dueDate || '';
+    if(due && due < todayStr)return false; // already flagged as overdue
+    return created && created < new Date(now.getTime()-48*60*60*1000).toISOString();
+  });
+  if(stale.length){
+    _rexNudges.push({
+      priority: 2,
+      icon: '&#128337;',
+      col: '#d97706',
+      bg: '#fffbeb',
+      title: stale.length + ' task' + (stale.length>1?'s':'')+' waiting 48h+',
+      body: stale.slice(0,2).map(function(t){return t.note||t.type||'Task';}).join(' &middot; '),
+      action: {label:'View', fn:'gp("todo")'}
+    });
+  }
+
+  // ── 3. Vacant shifts in <24h ─────────────────────────────────────────────
+  var urgent = _cascadeShifts.filter(function(s){
+    if(s.status !== 'open')return false;
+    var d = (s.isoDate||'').slice(0,10);
+    return d === todayStr || d === tomorrowStr;
+  });
+  if(urgent.length){
+    _rexNudges.push({
+      priority: 1,
+      icon: '&#128680;',
+      col: '#ef4444',
+      bg: '#fef2f2',
+      title: urgent.length + ' vacant shift'+(urgent.length>1?'s':'')+' in <24h',
+      body: urgent.slice(0,2).map(function(s){return (s.hospital||'')+(s.role?' · '+s.role:'');}).join(' &middot; '),
+      action: {label:'Go to Cascade', fn:'gp("cascade")'}
+    });
+  }
+
+  // ── 4. Confirmed shifts tomorrow — reconfirm ─────────────────────────────
+  var needsReconfirm = _cascadeShifts.filter(function(s){
+    var d = (s.isoDate||'').slice(0,10);
+    var st = s.cascade_status || '';
+    return d === tomorrowStr && (st === 'confirmed' || st === 'booked');
+  });
+  if(needsReconfirm.length){
+    _rexNudges.push({
+      priority: 2,
+      icon: '&#128226;',
+      col: '#1558a0',
+      bg: '#e8f0fa',
+      title: 'Send reconfirmations for tomorrow',
+      body: needsReconfirm.slice(0,2).map(function(s){return (s.assignedCandidate||'')+(s.hospital?' at '+s.hospital:'');}).join(' &middot; '),
+      action: {label:'Go to Cascade', fn:'gp("cascade")'}
+    });
+  }
+
+  // ── 5. NHS leads not followed up ─────────────────────────────────────────
+  if(typeof _nlLeads !== 'undefined'){
+    var staleLeads = _nlLeads.filter(function(l){
+      if(l.status !== 'contacted')return false;
+      var ca = l.contacted_at || '';
+      if(!ca)return false;
+      return ca < new Date(now.getTime()-5*24*60*60*1000).toISOString();
+    });
+    if(staleLeads.length){
+      _rexNudges.push({
+        priority: 3,
+        icon: '&#128100;',
+        col: '#7b2fa0',
+        bg: '#f3e8fa',
+        title: staleLeads.length + ' lead'+(staleLeads.length>1?'s':'')+' not followed up in 5d',
+        body: staleLeads.slice(0,2).map(function(l){return l.name||'';}).join(' &middot; '),
+        action: {label:'View leads', fn:'gp("nhsleads")'}
+      });
+    }
+  }
+
+  // ── 6. Candidates available today but not booked on matching vacancy ──────
+  var todayDow = now.getDay();
+  var todayDi = todayDow === 0 ? 6 : todayDow - 1;
+  var wkData = gWD();
+  var availToday = [];
+  C.forEach(function(c, ri){
+    if(!c || !(c.n||c.name))return;
+    var cell = (wkData[ri]||{})[todayDi];
+    if((cell||'').toUpperCase() === 'A') availToday.push(c.n||c.name||'');
+  });
+  var vacantToday = _cascadeShifts.filter(function(s){
+    return s.status === 'open' && (s.isoDate||'').slice(0,10) === todayStr;
+  });
+  if(availToday.length && vacantToday.length){
+    _rexNudges.push({
+      priority: 2,
+      icon: '&#9889;',
+      col: '#157a52',
+      bg: '#e2f4ec',
+      title: availToday.length+' available today, '+vacantToday.length+' vacant shift'+(vacantToday.length>1?'s':''),
+      body: 'Check Available tab in Cascade',
+      action: {label:'Go to Cascade', fn:'gp("cascade")'}
+    });
+  }
+
+  // Sort by priority
+  _rexNudges.sort(function(a,b){return a.priority-b.priority;});
+
+  // Render nudges
+  rexRenderNudges();
+
+  // Update badge
+  var badge = document.getElementById('rex-nudge-badge');
+  if(badge){
+    if(_rexNudges.length){
+      badge.style.display='flex';
+      badge.textContent=_rexNudges.length;
+    } else {
+      badge.style.display='none';
+    }
+  }
+
+  // Update status line
+  var sl = document.getElementById('rex-status-line');
+  if(sl){
+    sl.textContent = _rexNudges.length
+      ? _rexNudges.length+' thing'+ (_rexNudges.length>1?'s':'')+' need attention'
+      : 'All clear \u2713';
+  }
+
+  _rexScanning = false;
+  _rexLastScan = Date.now();
+}
+
+function rexRenderNudges(){
+  var el = document.getElementById('rex-nudges');
+  if(!el)return;
+  if(!_rexNudges.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML='<div style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3)">Needs attention</div>'
+    + _rexNudges.map(function(n,i){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:0.5px solid var(--b1);background:'+n.bg+'">'
+      +'<span style="font-size:16px;flex-shrink:0">'+n.icon+'</span>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:11px;font-weight:600;color:'+n.col+'">'+n.title+'</div>'
+        +(n.body?'<div style="font-size:10px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">'+n.body+'</div>':'')
+      +'</div>'
+      +(n.action?'<button onclick="'+n.action.fn+';rexToggle()" style="padding:3px 10px;border:0.5px solid '+n.col+';border-radius:5px;background:transparent;color:'+n.col+';font-size:10px;cursor:pointer;white-space:nowrap;font-weight:600">'+n.action.label+'</button>':'')
+      +'<button onclick="rexDismissNudge('+i+')" style="width:18px;height:18px;border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:11px;flex-shrink:0;padding:0">&#x2715;</button>'
+      +'</div>';
+  }).join('');
+}
+
+function rexDismissNudge(i){
+  _rexNudges.splice(i,1);
+  rexRenderNudges();
+  var badge=document.getElementById('rex-nudge-badge');
+  if(badge){
+    if(_rexNudges.length){badge.textContent=_rexNudges.length;}
+    else{badge.style.display='none';}
+  }
+}
+
+// ── CHAT RENDERING ──────────────────────────────────────────────────────────
+function rexAddMessage(role, text, actions){
+  var msg = {role:role, text:text, ts:new Date(), actions:actions||[]};
+  _rexMessages.push(msg);
+  rexRenderMessage(msg);
+}
+
+function rexRenderMessage(msg){
+  var container = document.getElementById('rex-messages');
+  if(!container)return;
+  var welcome = document.getElementById('rex-welcome');
+  if(welcome && _rexMessages.length > 0)welcome.style.display='none';
+  var isUser = msg.role === 'user';
+  var wrap = document.createElement('div');
+  wrap.style.cssText='display:flex;gap:8px;align-items:flex-start;'+(isUser?'flex-direction:row-reverse':'');
+  if(!isUser){
+    var avatar=document.createElement('div');
+    avatar.style.cssText='width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1a2744,#2d4a8a);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px';
+    avatar.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M8 12c-4 1-4 6-4 6h16s0-5-4-6"/></svg>';
+    wrap.appendChild(avatar);
+  }
+  var bubble=document.createElement('div');
+  bubble.style.cssText='max-width:82%;padding:9px 13px;border-radius:'+(isUser?'12px 4px 12px 12px':'4px 12px 12px 12px')+';background:'+(isUser?'#1a2744':'var(--su2)')+';color:'+(isUser?'#fff':'var(--tx)')+';font-size:12px;line-height:1.5;word-break:break-word';
+  // Format text — convert **bold** and newlines
+  var formatted = msg.text
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+  bubble.innerHTML=formatted;
+
+  // Action buttons (approval cards)
+  if(msg.actions && msg.actions.length){
+    var actDiv=document.createElement('div');
+    actDiv.style.cssText='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap';
+    msg.actions.forEach(function(a){
+      var btn=document.createElement('button');
+      btn.textContent=a.label;
+      btn.style.cssText='padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;border:none;'
+        +(a.primary?'background:#1a2744;color:#fff':'background:var(--su);color:var(--t2);border:0.5px solid var(--b2)');
+      btn.onclick=function(){a.fn();actDiv.remove();};
+      actDiv.appendChild(btn);
+    });
+    bubble.appendChild(actDiv);
+  }
+
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  container.scrollTop=container.scrollHeight;
+}
+
+function rexShowTyping(){
+  var container=document.getElementById('rex-messages');
+  if(!container)return;
+  var div=document.createElement('div');
+  div.id='rex-typing';
+  div.style.cssText='display:flex;gap:8px;align-items:center';
+  div.innerHTML='<div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1a2744,#2d4a8a);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M8 12c-4 1-4 6-4 6h16s0-5-4-6"/></svg></div>'
+    +'<div style="background:var(--su2);border-radius:4px 12px 12px 12px;padding:10px 14px;display:flex;gap:4px;align-items:center">'
+    +'<span style="width:6px;height:6px;border-radius:50%;background:var(--t3);animation:rex-dot 1.2s ease-in-out infinite"></span>'
+    +'<span style="width:6px;height:6px;border-radius:50%;background:var(--t3);animation:rex-dot 1.2s ease-in-out .2s infinite"></span>'
+    +'<span style="width:6px;height:6px;border-radius:50%;background:var(--t3);animation:rex-dot 1.2s ease-in-out .4s infinite"></span>'
+    +'</div>';
+  container.appendChild(div);
+  container.scrollTop=container.scrollHeight;
+}
+
+function rexHideTyping(){
+  var el=document.getElementById('rex-typing');
+  if(el)el.remove();
+}
+
+// ── CONTEXT BUILDER ─────────────────────────────────────────────────────────
+function rexBuildContext(){
+  var now = new Date();
+  var todayStr = now.toISOString().slice(0,10);
+  var tomorrowD = new Date(now); tomorrowD.setDate(now.getDate()+1);
+  var tomorrowStr = tomorrowD.toISOString().slice(0,10);
+
+  // Cascade summary
+  var cascadeSummary = {
+    vacant: _cascadeShifts.filter(function(s){return s.status==='open';}).length,
+    submitted: _cascadeShifts.filter(function(s){return s.cascade_status==='submitted';}).length,
+    booked: _cascadeShifts.filter(function(s){return s.cascade_status==='booked';}).length,
+    confirmed: _cascadeShifts.filter(function(s){return s.cascade_status==='confirmed';}).length,
+    urgentToday: _cascadeShifts.filter(function(s){return s.status==='open'&&(s.isoDate||'').slice(0,10)===todayStr;}).length,
+    urgentTomorrow: _cascadeShifts.filter(function(s){return s.status==='open'&&(s.isoDate||'').slice(0,10)===tomorrowStr;}).length
+  };
+
+  // Tasks summary
+  var myName = (_currentUser&&_currentUser.name)||'';
+  var myTasks = _tasks.filter(function(t){return !t.done&&(!myName||!t.consultant||t.consultant===myName);});
+  var overdueTasks = myTasks.filter(function(t){var d=t.due_date||t.dueDate||'';return d&&d<todayStr;});
+
+  // Candidates available
+  var wkData = gWD();
+  var todayDow = now.getDay();
+  var todayDi = todayDow===0?6:todayDow-1;
+  var availableToday = [];
+  C.forEach(function(c,ri){
+    if(!c||(!(c.n||c.name)))return;
+    if(((wkData[ri]||{})[todayDi]||'').toUpperCase()==='A')availableToday.push((c.n||c.name)+(c.s?' ('+c.s+')':''));
+  });
+
+  // Schedule today
+  var dow = now.getDay();
+  var schedToday = null;
+  if(typeof SCHED_DATA!=='undefined'&&dow>=1&&dow<=5)schedToday=SCHED_DATA[dow-1];
+
+  var ctx = 'TODAY: '+now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'\n';
+  ctx += 'USER: '+(myName||'Consultant')+'\n\n';
+
+  ctx += 'DESK STATUS:\n';
+  ctx += '- Shifts this week: '+((function(){var wd=gWD(),tot=0;Object.keys(wd).forEach(function(ri){Object.keys(wd[ri]).forEach(function(di){var v=wd[ri][di];if(v&&v!=='A'&&v!=='U'&&v!=='T')tot++;});});return tot;})())+'\n';
+  ctx += '- Vacant shifts: '+cascadeSummary.vacant+' ('+cascadeSummary.urgentToday+' today, '+cascadeSummary.urgentTomorrow+' tomorrow)\n';
+  ctx += '- Submitted: '+cascadeSummary.submitted+' | Booked: '+cascadeSummary.booked+' | Confirmed: '+cascadeSummary.confirmed+'\n';
+  ctx += '- Open tasks: '+myTasks.length+' ('+overdueTasks.length+' overdue)\n';
+  ctx += '- Candidates available today: '+(availableToday.length?availableToday.slice(0,8).join(', '):('None marked'))+'\n\n';
+
+  // Top 5 open tasks
+  if(myTasks.length){
+    ctx += 'OPEN TASKS (top 5):\n';
+    myTasks.slice(0,5).forEach(function(t){
+      ctx += '- '+(t.note||t.type||'Task')+(t.due_date?' [due '+t.due_date+']':'')+(t.due_date&&t.due_date<todayStr?' OVERDUE':'')+'\n';
+    });
+    ctx += '\n';
+  }
+
+  // Urgent cascade shifts
+  var urgentShifts = _cascadeShifts.filter(function(s){
+    var d=(s.isoDate||'').slice(0,10);
+    return s.status==='open'&&(d===todayStr||d===tomorrowStr);
+  });
+  if(urgentShifts.length){
+    ctx += 'URGENT VACANT SHIFTS:\n';
+    urgentShifts.slice(0,5).forEach(function(s){
+      ctx += '- '+s.hospital+' | '+s.role+' | '+(s.isoDate||'').slice(0,10)+' | '+(s.timeStart||'?')+'-'+(s.timeEnd||'?')+'\n';
+    });
+    ctx += '\n';
+  }
+
+  // Schedule
+  if(schedToday){
+    ctx += 'YOUR SCHEDULE TODAY ('+schedToday.label+' — '+schedToday.subtitle+'):\n';
+    var hr=now.getHours(),mn=now.getMinutes();
+    var nowMins=hr*60+mn;
+    schedToday.blocks.forEach(function(b){
+      var bStart=parseInt(b.time.split(':')[0])*60+parseInt(b.time.split(':')[1]);
+      var bEnd=parseInt(b.end.split(':')[0])*60+parseInt(b.end.split(':')[1]);
+      var status=nowMins>=bStart&&nowMins<bEnd?'[NOW]':nowMins>=bEnd?'[DONE]':'[AHEAD]';
+      ctx += status+' '+b.time+'-'+b.end+' '+b.mode+' ('+b.cat+')\n';
+    });
+    ctx += '\n';
+  }
+
+  // Recent cascade shifts with activity
+  var recentCascade=_cascadeShifts.filter(function(s){return s.cascade_status==='booked'||s.cascade_status==='confirmed'||s.cascade_status==='submitted';}).slice(0,5);
+  if(recentCascade.length){
+    ctx+='RECENTLY ACTIVE SHIFTS:\n';
+    recentCascade.forEach(function(s){ctx+='- '+s.hospital+' | '+(s.role||'')+' | '+(s.isoDate||'').slice(0,10)+' | '+s.cascade_status+(s.assignedCandidate?' | '+s.assignedCandidate:'')+'\n';});
+    ctx+='\n';
+  }
+  // Active candidates
+  var activeCands=C.filter(function(c){return c.ac==='Active'&&(c.n||c.name);}).slice(0,30);
+  if(activeCands.length){
+    ctx+='ACTIVE CANDIDATES (sample):\n';
+    activeCands.forEach(function(c){ctx+='- '+(c.n||c.name)+' | '+(c.s||c.skill||'')+'\n';});
+    ctx+='\n';
+  }
+  // NHS Leads
+  if(typeof _nlLeads!=='undefined'&&_nlLeads.length){
+    var newLeads=_nlLeads.filter(function(l){return l.status==='new';}).length;
+    var contactedLeads=_nlLeads.filter(function(l){return l.status==='contacted';}).length;
+    ctx+='NHS LEADS: '+_nlLeads.length+' total | '+newLeads+' new | '+contactedLeads+' contacted\n';
+  }
+  return ctx;
+}
+
+// ── SEND MESSAGE ─────────────────────────────────────────────────────────────
+function rexSend(){
+  var inp=document.getElementById('rex-input');
+  if(!inp||!inp.value.trim())return;
+  var text=inp.value.trim();
+  inp.value='';
+  inp.style.height='36px';
+
+  rexAddMessage('user',text);
+
+  // Hide quick prompts after first message
+  var qp=document.getElementById('rex-quick-prompts');
+  if(qp)qp.style.display='none';
+
+  rexShowTyping();
+  rexCallGemini(text,'');
+}
+
+function rexShowApiKeyPrompt(){
+  rexAddMessage('rex',
+    "I need a Gemini API key to answer questions. Get one free at **aistudio.google.com** \u2014 it only takes a minute.",
+    [
+      {label:'Enter API key', primary:true, fn:function(){
+        var k=prompt('Paste your Gemini API key:');
+        if(k&&k.trim()){
+          _rexApiKey=k.trim();
+          localStorage.setItem('rex_api_key',_rexApiKey);
+          rexAddMessage('rex','Got it. API key saved. Ask me anything.');
+        }
+      }},
+      {label:'Not now', fn:function(){}}
+    ]
+  );
+}
+
+// ── GEMINI API CALL ──────────────────────────────────────────────────────────
+function rexCallGemini(userMessage){
+  var ctx = rexBuildContext();
+  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes)\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx;
+
+  var messages = [{role:'user',parts:[{text:systemPrompt+'\n\nUser: '+userMessage}]}];
+
+  // Include recent conversation history
+  _rexMessages.slice(-6).forEach(function(m){
+    if(m.role!=='user'&&m.role!=='rex')return;
+    messages.push({role:m.role==='user'?'user':'model',parts:[{text:m.text}]});
+  });
+
+  fetch(_GEMINI_URL,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+      'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+    },
+    body:JSON.stringify({
+      contents:[{role:'user',parts:[{text:systemPrompt+'\n\n'+_rexMessages.slice(-6).map(function(m){return (m.role==='user'?'User':'Rex')+': '+m.text;}).join('\n')+'\nUser: '+userMessage}]}],
+      generationConfig:{temperature:0.7,maxOutputTokens:600}
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    rexHideTyping();
+    if(data.candidates&&data.candidates[0]&&data.candidates[0].content){
+      var reply=data.candidates[0].content.parts[0].text||'';
+      // Check if reply contains an action block
+      rexHandleReply(reply);
+    } else if(data.error){
+      var code=data.error.code||'ERR';
+      var msg=data.error.message||'Unknown error';
+      console.error('Rex error ['+code+']:', msg);
+      rexAddMessage('rex','I ran into an issue (**Error '+code+'**). Please speak to Josh to sort this.');
+    } else {
+      var errCode='REX-001';
+      console.error('Rex unexpected ['+errCode+']:', data);
+      rexAddMessage('rex','Something unexpected happened (**Error '+errCode+'**). Please speak to Josh to sort this.');
+    }
+  })
+  .catch(function(e){
+    rexHideTyping();
+    var errCode='REX-002';
+    console.error('Rex connection ['+errCode+']:', e);
+    rexAddMessage('rex','Connection issue (**Error '+errCode+'**). Please speak to Josh to sort this.');
+  });
+}
+
+// ── AUTO-SCAN on page load ───────────────────────────────────────────────────
+function rexAutoScan(){
+  // Run after data is loaded
+  setTimeout(function(){
+    rexScan();
+    // Re-scan every 15 minutes
+    setInterval(rexScan, 15*60*1000);
+  }, 3000);
+}
+
+// Run on load
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',rexAutoScan);
+} else {
+  rexAutoScan();
+}
+
+
+// ── REX PHASE 3: ACTION DETECTION & EXECUTION ──────────────────────────────
+
+function rexHandleReply(reply){
+  // Check if reply contains a structured action block
+  // Rex signals actions with [ACTION: {...}] blocks
+  var actionMatch = reply.match(/\[ACTION:\s*(\{[\s\S]*?\})\]/);
+  if(actionMatch){
+    try{
+      var action = JSON.parse(actionMatch[1]);
+      var cleanReply = reply.replace(/\[ACTION:\s*\{[\s\S]*?\}\]/,'').trim();
+      rexAddMessage('rex', cleanReply);
+      rexShowApprovalCard(action);
+      return;
+    }catch(e){}
+  }
+  // No action block - just render the reply
+  rexAddMessage('rex', reply);
+}
+
+function rexShowApprovalCard(action){
+  var container = document.getElementById('rex-messages');
+  if(!container)return;
+
+  var card = document.createElement('div');
+  card.style.cssText = 'margin:8px 0;border:1.5px solid #1558a0;border-radius:12px;overflow:hidden;background:var(--su)';
+
+  // Card header
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'background:#1a2744;padding:10px 14px;display:flex;align-items:center;gap:8px';
+  hdr.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+    + '<span style="font-size:11px;font-weight:700;color:#fff;letter-spacing:.04em">ACTION REQUIRED</span>';
+  card.appendChild(hdr);
+
+  // Card body - show action details
+  var body = document.createElement('div');
+  body.style.cssText = 'padding:12px 14px';
+
+  var typeLabel = {
+    'add_shift': 'Add Cascade Shift',
+    'create_task': 'Create Task',
+    'update_lead': 'Update NHS Lead',
+    'mark_available': 'Mark Candidate Available'
+  }[action.type] || action.type;
+
+  var detailsHtml = '<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">'+typeLabel+'</div>';
+  var fields = action.fields || action;
+  Object.keys(fields).forEach(function(k){
+    if(k==='type')return;
+    var val = fields[k];
+    if(val===null||val===undefined||val==='')return;
+    detailsHtml += '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:0.5px solid var(--b1);font-size:11px">'
+      +'<span style="color:var(--t3);min-width:80px;flex-shrink:0;text-transform:capitalize">'+k.replace(/_/g,' ')+'</span>'
+      +'<span style="color:var(--tx);font-weight:500">'+val+'</span>'
+      +'</div>';
+  });
+  body.innerHTML = detailsHtml;
+  card.appendChild(body);
+
+  // Buttons
+  var btns = document.createElement('div');
+  btns.style.cssText = 'padding:10px 14px;display:flex;gap:8px;border-top:0.5px solid var(--b1)';
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.style.cssText = 'flex:1;padding:7px;border:none;border-radius:8px;background:#1a2744;color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  confirmBtn.textContent = 'Confirm';
+  confirmBtn.onclick = function(){
+    card.remove();
+    rexExecuteAction(action);
+  };
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'padding:7px 14px;border:0.5px solid var(--b2);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function(){
+    card.remove();
+    rexAddMessage('rex','Cancelled. Let me know if you want to try something else.');
+  };
+
+  btns.appendChild(confirmBtn);
+  btns.appendChild(cancelBtn);
+  card.appendChild(btns);
+  container.appendChild(card);
+  container.scrollTop = container.scrollHeight;
+}
+
+function rexExecuteAction(action){
+  var type = action.type;
+
+  if(type === 'add_shift'){
+    rexExecuteAddShift(action);
+  } else if(type === 'create_task'){
+    rexExecuteCreateTask(action);
+  } else if(type === 'update_lead'){
+    rexExecuteUpdateLead(action);
+  } else {
+    rexAddMessage('rex', 'I don\'t know how to execute that action yet. Please speak to Josh to sort this.');
+  }
+}
+
+// ── ADD CASCADE SHIFT ───────────────────────────────────────────────────────
+function rexExecuteAddShift(action){
+  var f = action.fields || action;
+  var id = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){
+    return(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16);
+  });
+  var body = {
+    id:             id,
+    hospital:       f.hospital||'',
+    role:           f.role||'',
+    ward:           f.ward||'theatres',
+    iso_date:       f.date||f.iso_date||'',
+    time_start:     f.time_start||f.start||null,
+    time_end:       f.time_end||f.end||null,
+    rate:           f.rate?parseFloat(f.rate)||null:null,
+    postcode:       f.postcode||'',
+    status:         'open',
+    visible:        true,
+    urgent:         false,
+    cascade_status: 'vacant',
+    created_by:     (_currentUser&&_currentUser.name)||''
+  };
+  supaFetch('POST','cascade_shifts','on_conflict=id',body,function(err,row){
+    if(err){
+      console.error('Rex add_shift error [REX-003]:', err);
+      rexAddMessage('rex','Failed to add the shift (**Error REX-003**). Please speak to Josh to sort this.');
+      return;
+    }
+    // Add to local cascade shifts
+    var newShift = {
+      id:id, hospital:body.hospital, role:body.role, ward:body.ward,
+      isoDate:body.iso_date, date:body.iso_date,
+      timeStart:body.time_start||'', timeEnd:body.time_end||'',
+      rate:body.rate, status:'open', visible:true,
+      cascade_status:'vacant', urgent:false,
+      assignedCandidate:'', responses:[],
+      candidateStatus:'', clientStatus:'', confirmationSent:false,
+      createdBy:body.created_by, createdAt:new Date().toISOString()
+    };
+    _cascadeShifts.unshift(newShift);
+    if(typeof _rCascadeRender==='function')_rCascadeRender();
+    rexAddMessage('rex', '**Done.** '+body.role+' shift at **'+body.hospital+'** on **'+body.iso_date+'** added to Cascade and live.');
+    showToast('Shift added by Rex','success');
+  });
+}
+
+// ── CREATE TASK ─────────────────────────────────────────────────────────────
+function rexExecuteCreateTask(action){
+  var f = action.fields || action;
+  var task = {
+    id: 'rex-'+Date.now(),
+    note: f.note||f.description||'',
+    type: f.type||'general',
+    consultant: f.assigned_to||(_currentUser&&_currentUser.name)||'',
+    due_date: f.due_date||'',
+    done: false,
+    createdAt: new Date().toISOString(),
+    createdBy: (_currentUser&&_currentUser.name)||'Rex'
+  };
+  supaFetch('POST','tasks_crm',null,task,function(err){
+    if(err){
+      console.error('Rex create_task error [REX-004]:', err);
+      rexAddMessage('rex','Failed to create the task (**Error REX-004**). Please speak to Josh to sort this.');
+      return;
+    }
+    _tasks.unshift(task);
+    if(typeof saveTasks==='function')saveTasks();
+    rexAddMessage('rex','**Done.** Task created: "'+task.note+'"'+(task.due_date?' due **'+task.due_date+'**':'')+'.');
+    showToast('Task created by Rex','success');
+  });
+}
+
+// ── UPDATE NHS LEAD ─────────────────────────────────────────────────────────
+function rexExecuteUpdateLead(action){
+  var f = action.fields || action;
+  if(!f.id){
+    rexAddMessage('rex','I need the lead ID to update it. Please check NHS Leads page.');
+    return;
+  }
+  var patch = {};
+  if(f.status)patch.status=f.status;
+  if(f.notes)patch.notes=f.notes;
+  if(f.status==='contacted'&&!f.contacted_at){
+    patch.contacted_at=new Date().toISOString();
+    patch.contacted_by=(_currentUser&&_currentUser.name)||'';
+  }
+  supaFetch('PATCH','nhs_leads','id=eq.'+f.id,patch,function(err){
+    if(err){
+      console.error('Rex update_lead error [REX-005]:', err);
+      rexAddMessage('rex','Failed to update the lead (**Error REX-005**). Please speak to Josh to sort this.');
+      return;
+    }
+    var lead=typeof _nlLeads!=='undefined'?_nlLeads.find(function(l){return l.id===f.id;}):null;
+    if(lead)Object.assign(lead,patch);
+    rexAddMessage('rex','**Done.** Lead updated.');
+    showToast('Lead updated by Rex','success');
+  });
+}
+
 </script>
+
+<!-- Rex AI Button -->
+<div id="rex-btn" onclick="rexToggle()" title="Rex — your Atlas assistant" style="position:fixed;right:0;bottom:172px;z-index:9991;background:linear-gradient(135deg,#1a2744 0%,#2d4a8a 100%);color:#fff;width:40px;height:40px;border-radius:10px 0 0 10px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:-3px 3px 12px rgba(26,39,68,0.35);transition:all .2s;border:none;flex-direction:column;gap:2px" onmouseover="this.style.width='44px'" onmouseout="this.style.width='40px'">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M8 12c-4 1-4 6-4 6h16s0-5-4-6"/><path d="M12 12v4"/><circle cx="9" cy="18" r="1" fill="white"/><circle cx="15" cy="18" r="1" fill="white"/></svg>
+  <span style="font-size:7px;font-weight:800;letter-spacing:.05em;color:rgba(255,255,255,0.85)">REX</span>
+</div>
+<div id="rex-nudge-badge" style="position:fixed;right:0;bottom:208px;z-index:9992;background:#ef4444;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(239,68,68,0.5)"></div>
+
+<!-- Rex Panel -->
+<div id="rex-panel" style="position:fixed;right:0;bottom:120px;z-index:9990;width:400px;max-height:calc(100vh - 140px);background:var(--su);border-radius:16px 0 0 16px;box-shadow:-8px 0 40px rgba(0,0,0,0.15);display:none;flex-direction:column;overflow:hidden;border:0.5px solid var(--b1)">
+
+  <!-- Rex Header -->
+  <div style="background:linear-gradient(135deg,#1a2744 0%,#2d4a8a 100%);padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M8 12c-4 1-4 6-4 6h16s0-5-4-6"/><path d="M12 12v4"/><circle cx="9" cy="18" r="1" fill="white"/><circle cx="15" cy="18" r="1" fill="white"/></svg>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700;color:#fff;letter-spacing:.01em">Rex</div>
+      <div id="rex-status-line" style="font-size:10px;color:rgba(255,255,255,0.6)">Your Atlas assistant</div>
+    </div>
+    <div id="rex-online-dot" style="width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,0.6)"></div>
+    <button onclick="rexToggle()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:28px;height:28px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:4px" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">&#x2715;</button>
+  </div>
+
+  <!-- Nudge strip (proactive alerts) -->
+  <div id="rex-nudges" style="display:none;flex-shrink:0;border-bottom:0.5px solid var(--b1);max-height:180px;overflow-y:auto"></div>
+
+  <!-- Chat messages -->
+  <div id="rex-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:200px">
+    <div id="rex-welcome" style="display:flex;gap:8px;align-items:flex-start">
+      <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1a2744,#2d4a8a);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M8 12c-4 1-4 6-4 6h16s0-5-4-6"/></svg>
+      </div>
+      <div style="background:var(--su2);border-radius:4px 12px 12px 12px;padding:10px 13px;font-size:12px;color:var(--tx);line-height:1.5;max-width:300px">
+        Morning. I&#x27;m Rex &mdash; I&#x27;ve got eyes on the desk. I&#x27;ll flag anything that needs attention and you can ask me anything about the CRM.<br><br>
+        <span style="color:var(--t3);font-size:11px">Try: &#x22;What needs doing today?&#x22;</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick prompts -->
+  <div id="rex-quick-prompts" style="padding:10px 14px 0;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+    <button onclick="rexQuickPrompt(this.textContent)" style="padding:4px 10px;border:0.5px solid var(--b2);border-radius:20px;background:var(--su2);color:var(--t2);font-size:10px;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='var(--bl)';this.style.color='var(--bl)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t2)'">What needs doing today?</button>
+    <button onclick="rexQuickPrompt(this.textContent)" style="padding:4px 10px;border:0.5px solid var(--b2);border-radius:20px;background:var(--su2);color:var(--t2);font-size:10px;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='var(--bl)';this.style.color='var(--bl)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t2)'">Any urgent shifts?</button>
+    <button onclick="rexQuickPrompt(this.textContent)" style="padding:4px 10px;border:0.5px solid var(--b2);border-radius:20px;background:var(--su2);color:var(--t2);font-size:10px;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='var(--bl)';this.style.color='var(--bl)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t2)'">Who&#x27;s available tomorrow?</button>
+  </div>
+
+  <!-- Input -->
+  <div style="padding:12px 14px;border-top:0.5px solid var(--b1);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--su)">
+    <textarea id="rex-input" placeholder="Ask Rex anything about the desk..." rows="1" onkeydown="rexKeyDown(event)" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'" style="flex:1;padding:8px 12px;border:0.5px solid var(--b2);border-radius:10px;background:var(--su2);color:var(--tx);font-size:12px;font-family:inherit;outline:none;resize:none;line-height:1.4;max-height:100px;min-height:36px"></textarea>
+    <button id="rex-send-btn" onclick="rexSend()" style="width:36px;height:36px;border-radius:9px;background:#1a2744;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" onmouseover="this.style.background='#2d4a8a'" onmouseout="this.style.background='#1a2744'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
 
 <!-- Chat toggle button -->
 <div id="chat-toggle-btn" onclick="chatToggle()" style="position:fixed;right:0;bottom:80px;z-index:9990;background:#1a2744;color:#fff;width:36px;height:36px;border-radius:8px 0 0 8px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:-2px 2px 8px rgba(0,0,0,.2);font-size:16px" title="Messages (M)">
@@ -20571,6 +21350,7 @@ function nlSaveNotes(id){
 
 <!-- Chat bubbles container -->
 <div id="chat-bubbles" style="position:fixed;bottom:0;right:50px;display:flex;align-items:flex-end;gap:10px;z-index:9995;pointer-events:none"></div>
+
 
 </body>
 </html>
