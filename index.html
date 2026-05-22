@@ -17732,7 +17732,7 @@ function resetHotkeys(){
 }
 
 function settingsTab(tab){
-  var tabs=['hotkeys','users'];
+  var tabs=['hotkeys','users','skills'];
   tabs.forEach(function(t){
     var btn=document.getElementById('stab-'+t);
     var content=document.getElementById('stab-content-'+t);
@@ -17741,6 +17741,7 @@ function settingsTab(tab){
     if(content)content.style.display=active?'':'none';
   });
   if(tab==='users') usersLoadList();
+  if(tab==='skills') rexRenderSkillsSettings();
 }
 
 function toggleSettings(){
@@ -19810,6 +19811,7 @@ function chatSubscribeRealtime(){}
     <div style="display:flex;gap:0;border-bottom:0.5px solid var(--b1);margin:0 -20px;padding:0 20px" id="settings-tabs">
       <button onclick="settingsTab('hotkeys')" id="stab-hotkeys" style="padding:7px 14px;border:none;border-bottom:2px solid var(--bl);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--bl);margin-bottom:-0.5px">Hotkeys</button>
       <button onclick="settingsTab('users')" id="stab-users" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--t3);margin-bottom:-0.5px;display:none" id="stab-users">Team</button>
+      <button onclick="settingsTab('skills')" id="stab-skills" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--t3);margin-bottom:-0.5px">Learned Skills</button>
     </div>
   </div>
 
@@ -19821,6 +19823,9 @@ function chatSubscribeRealtime(){}
       <button onclick="resetHotkeys()" style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:12px;color:var(--t3)" onmouseover="this.style.background='var(--su2)'" onmouseout="this.style.background='transparent'">Reset to defaults</button>
     </div>
   </div>
+
+  <!-- Tab: Learned Skills -->
+  <div id="stab-content-skills" style="display:none;flex:1;overflow-y:auto;padding:16px 20px"></div>
 
   <!-- Tab: Team Users (admin only) -->
   <div id="stab-content-users" style="display:none;flex:1;overflow-y:auto;padding:16px 20px">
@@ -20874,7 +20879,39 @@ function rexRenderMessage(msg){
   }
 
   wrap.appendChild(bubble);
-  container.appendChild(wrap);
+
+  // Feedback buttons on Rex messages only
+  if(!isUser){
+    var msgId = 'rex-msg-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+    wrap.setAttribute('data-msgid', msgId);
+    var fbDiv = document.createElement('div');
+    fbDiv.style.cssText = 'display:flex;gap:4px;margin-top:4px;margin-left:36px';
+    var shortText = msg.text.replace(/['"]/g,'').slice(0,150);
+    var upBtn = document.createElement('button');
+    upBtn.setAttribute('data-msgid', msgId);
+    upBtn.setAttribute('data-msgtext', shortText);
+    upBtn.onclick = function(){ rexThumbsUp(this); };
+    upBtn.title = 'Good response';
+    upBtn.innerHTML = '&#128077;';
+    upBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;opacity:.4;padding:2px 4px;border-radius:4px;transition:opacity .15s';
+    upBtn.onmouseover = function(){ this.style.opacity='1'; };
+    upBtn.onmouseout = function(){ if(!this.classList.contains('active'))this.style.opacity='.4'; };
+    var dnBtn = document.createElement('button');
+    dnBtn.setAttribute('data-msgid', msgId);
+    dnBtn.setAttribute('data-msgtext', shortText);
+    dnBtn.onclick = function(){ rexThumbsDown(this); };
+    dnBtn.title = 'Wrong response';
+    dnBtn.innerHTML = '&#128078;';
+    dnBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;opacity:.4;padding:2px 4px;border-radius:4px;transition:opacity .15s';
+    dnBtn.onmouseover = function(){ this.style.opacity='1'; };
+    dnBtn.onmouseout = function(){ if(!this.classList.contains('active'))this.style.opacity='.4'; };
+    fbDiv.appendChild(upBtn);
+    fbDiv.appendChild(dnBtn);
+    container.appendChild(wrap);
+    container.appendChild(fbDiv);
+  } else {
+    container.appendChild(wrap);
+  }
   container.scrollTop=container.scrollHeight;
 }
 
@@ -21044,7 +21081,9 @@ function rexShowApiKeyPrompt(){
 function rexCallGemini(userMessage){
   var ctx = rexBuildContext();
   var memCtx = rexMemoryContext();
-  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes)\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nMemory: When you learn something worth remembering about a candidate, trust, or pattern, append a memory tag on a new line:\n[REMEMBER: category|subject|key|value]\nCategories: trust, candidate, pattern, desk, personal\nExample: [REMEMBER: candidate|Roseline Emmanuel|preferred_hospital|East Surrey]\nFor private info about a specific user only: [REMEMBER_PRIVATE: key|value]\nNever share personal details about one team member with another.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
+  // Extract hard rules separately for emphasis
+  var ruleCtx = _rexMemories.filter(function(m){return m.category==="rule";}).map(function(m){return "- "+m.value;}).join("\n");
+  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital)\n\nFor shift count requests (e.g. add a shift for X at Y on date): use set_shift_count. Do NOT ask for role, times or rate \u2014 only need candidate name, date and hospital name.\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nMemory: When you learn something worth remembering about a candidate, trust, or pattern, append a memory tag on a new line:\n[REMEMBER: category|subject|key|value]\nCategories: trust, candidate, pattern, desk, personal\nExample: [REMEMBER: candidate|Roseline Emmanuel|preferred_hospital|East Surrey]\nFor private info about a specific user only: [REMEMBER_PRIVATE: key|value]\nNever share personal details about one team member with another.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx + (ruleCtx ? "\n\nRULES YOU MUST ALWAYS FOLLOW:\n" + ruleCtx : "") + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
 
   var messages = [{role:'user',parts:[{text:systemPrompt+'\n\nUser: '+userMessage}]}];
 
@@ -21153,7 +21192,8 @@ function rexShowApprovalCard(action){
     'add_shift': 'Add Cascade Shift',
     'create_task': 'Create Task',
     'update_lead': 'Update NHS Lead',
-    'mark_available': 'Mark Candidate Available'
+    'mark_available': 'Mark Candidate Available',
+    'set_shift_count': 'Add to Shift Count'
   }[action.type] || action.type;
 
   var detailsHtml = '<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">'+typeLabel+'</div>';
@@ -21206,6 +21246,8 @@ function rexExecuteAction(action){
     rexExecuteCreateTask(action);
   } else if(type === 'update_lead'){
     rexExecuteUpdateLead(action);
+  } else if(type === 'set_shift_count'){
+    rexExecuteSetShiftCount(action);
   } else {
     rexAddMessage('rex', 'I don\'t know how to execute that action yet. Please speak to Josh to sort this.');
   }
@@ -21465,6 +21507,232 @@ function rexMemFilterClick(btn){
 function rexMemDeleteClick(btn){
   var id = btn.getAttribute('data-memid');
   if(id && confirm('Delete this memory?')) rexDeleteMemory(id);
+}
+
+// ── SET SHIFT COUNT ─────────────────────────────────────────────────────────
+function rexExecuteSetShiftCount(action){
+  var f = action.fields || action;
+  var candName = f.candidate || f.candidate_name || '';
+  var dateStr = f.date || ''; // YYYY-MM-DD
+  var hospital = f.hospital || '';
+
+  if(!candName || !dateStr || !hospital){
+    rexAddMessage('rex', 'Missing details — need candidate, date and hospital to update shift count.');
+    return;
+  }
+
+  // Work out week key (Monday of that week) and day index
+  var d = new Date(dateStr + 'T12:00:00');
+  var dow = (d.getDay() + 6) % 7; // 0=Mon, 6=Sun
+  var mon = new Date(d);
+  mon.setDate(d.getDate() - dow);
+  var wk = mon.getFullYear() + '-' + String(mon.getMonth()+1).padStart(2,'0') + '-' + String(mon.getDate()).padStart(2,'0');
+
+  // Find candidate index
+  var candIdx = getCandIdx(candName);
+  if(candIdx < 0){
+    rexAddMessage('rex', 'Can\'t find **' + candName + '** in the candidates list.');
+    return;
+  }
+
+  // Update sd
+  if(!sd[wk]) sd[wk] = {};
+  if(!sd[wk][candIdx]) sd[wk][candIdx] = {};
+  sd[wk][candIdx][dow] = hospital;
+
+  // Save to Supabase
+  saveShiftCountEntry(wk, candName, sd[wk][candIdx]);
+
+  // Re-render if on shift count page
+  if(typeof rTable === 'function') rTable();
+
+  var dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  rexAddMessage('rex', '**Done.** ' + candName + ' — **' + hospital + '** added for **' + dayNames[dow] + ' ' + dateStr + '** on the shift count.');
+  showToast('Shift count updated by Rex', 'success');
+}
+
+// ── REX LEARNING SYSTEM ──────────────────────────────────────────────────────
+
+function rexThumbsUp(btn){
+  btn.classList.add('active');
+  btn.style.opacity = '1';
+  btn.style.background = 'rgba(21,88,160,0.1)';
+  // Disable both thumbs
+  var parent = btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){ b.onclick = null; b.style.cursor = 'default'; });
+  // Save positive pattern memory silently
+  var msgText = btn.getAttribute('data-msgtext') || '';
+  if(msgText) rexSaveMemory('pattern', 'feedback', 'approved_response', msgText.slice(0,120), false);
+}
+
+function rexThumbsDown(btn){
+  btn.classList.add('active');
+  btn.style.opacity = '1';
+  btn.style.background = 'rgba(220,53,69,0.1)';
+  // Disable both thumbs
+  var parent = btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){ b.onclick = null; b.style.cursor = 'default'; });
+  var msgText = btn.getAttribute('data-msgtext') || '';
+  // Ask what went wrong — inject correction input
+  rexAddMessage('rex', "That wasn't right? Tell me what I should have done instead.");
+  _rexAwaitingCorrection = { originalResponse: msgText };
+}
+
+var _rexAwaitingCorrection = null;
+
+// Hook into rexSend to intercept corrections
+var _origRexSend = null;
+(function(){
+  var _realSend = window.rexSend;
+  window.rexSend = function(){
+    var inp = document.getElementById('rex-input');
+    if(!inp) return _realSend();
+    var text = inp.value.trim();
+    if(_rexAwaitingCorrection && text){
+      inp.value = '';
+      inp.style.height = '36px';
+      rexAddMessage('user', text);
+      var correction = _rexAwaitingCorrection;
+      _rexAwaitingCorrection = null;
+      rexProcessCorrection(correction.originalResponse, text);
+      return;
+    }
+    _realSend();
+  };
+})();
+
+function rexProcessCorrection(originalResponse, correction){
+  rexShowTyping();
+  // Ask Gemini to assess whether this can be learned directly
+  var prompt = 'A user corrected one of your responses. Assess whether this correction can be learned as a simple rule (e.g. always do X when asked Y, never ask for Z when doing W) or whether it requires code changes (e.g. new features, new data sources, new integrations, new UI).\n\nOriginal response: ' + originalResponse + '\n\nCorrection/what should have happened: ' + correction + '\n\nRespond in this exact format:\nASSESSMENT: [learnable|needs_code]\nRULE: [one clear sentence rule if learnable, or description of what code change is needed]\nEXPLANATION: [one sentence explaining your assessment]';
+
+  fetch(_GEMINI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+    },
+    body: JSON.stringify({
+      contents: [{role:'user', parts:[{text: prompt}]}],
+      generationConfig: {temperature: 0.3, maxOutputTokens: 300}
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    rexHideTyping();
+    var reply = (data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts[0].text) || '';
+    var assessment = (reply.match(/ASSESSMENT:\s*(\S+)/) || [])[1] || '';
+    var rule = (reply.match(/RULE:\s*(.+)/) || [])[1] || correction;
+    var explanation = (reply.match(/EXPLANATION:\s*(.+)/) || [])[1] || '';
+
+    if(assessment === 'learnable'){
+      rexAddMessage('rex', 'Got it. I think I can learn this as a rule: **"' + rule + '"**\n\n' + explanation + '\n\nShould I remember this for next time?', [
+        {label: 'Yes, learn it', primary: true, fn: function(){
+          rexSaveMemory('rule', 'learned_rule', 'rule_' + Date.now(), rule, false);
+          rexAddMessage('rex', "Done — I've saved that as a rule. I'll follow it from now on.");
+        }},
+        {label: "No, don't save", fn: function(){
+          rexAddMessage('rex', 'Okay, I won\'t save it. Let me know if I get it wrong again.');
+        }}
+      ]);
+    } else {
+      // Needs code change — save to pending skills
+      var pendingSkill = {
+        description: 'User correction: ' + correction,
+        correction: 'Original: ' + originalResponse.slice(0,200) + ' | Should have: ' + correction,
+        status: 'pending'
+      };
+      supaFetch('POST', 'rex_pending_skills', '', pendingSkill, function(err){
+        if(!err) console.log('Rex pending skill saved');
+      });
+      rexAddMessage('rex', "I can't learn this one automatically — it needs a code change. **I've flagged it for Josh** and it will show up in Settings → Learned Skills as pending.\n\n" + explanation);
+    }
+  })
+  .catch(function(e){
+    rexHideTyping();
+    rexAddMessage('rex', 'Had trouble assessing that correction. Try again or flag it to Josh manually.');
+  });
+}
+
+// ── DESTRUCTIVE ACTION GUARD ─────────────────────────────────────────────────
+var _DESTRUCTIVE_TYPES = ['delete', 'remove', 'clear', 'bulk_update', 'bulk_delete'];
+var _origRexExecuteAction = window.rexExecuteAction;
+(function(){
+  var _realExecute = window.rexExecuteAction;
+  window.rexExecuteAction = function(action){
+    var type = (action.type || '').toLowerCase();
+    var isDestructive = _DESTRUCTIVE_TYPES.some(function(d){ return type.indexOf(d) >= 0; });
+    if(isDestructive){
+      rexAddMessage('rex', '\u26a0\ufe0f **Destructive action detected.** This will permanently delete or modify data. Are you absolutely sure?', [
+        {label: 'Yes, proceed', primary: false, fn: function(){ _realExecute(action); }},
+        {label: 'Cancel', primary: true, fn: function(){ rexAddMessage('rex', 'Cancelled. Nothing was changed.'); }}
+      ]);
+      return;
+    }
+    _realExecute(action);
+  };
+})();
+
+// ── LEARNED SKILLS SETTINGS PAGE ─────────────────────────────────────────────
+function rexRenderSkillsSettings(){
+  var el = document.getElementById('stab-content-skills');
+  if(!el) return;
+  if(!_rexMemoryLoaded){ rexLoadMemory(function(){ rexRenderSkillsSettings(); }); return; }
+  var rules = _rexMemories.filter(function(m){ return m.category === 'rule'; });
+  supaFetch('GET','rex_pending_skills','select=id,description,correction,status,created_at&order=created_at.desc',null,function(err,rows){
+    renderSkillsContent(el, rules, rows||[]);
+  });
+}
+
+function renderSkillsContent(el, rules, pending){
+  var h = '';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:10px">Learned Rules <span style="font-weight:400;color:var(--t3)">('+rules.length+')</span></div>';
+  if(!rules.length){
+    h += '<p style="font-size:12px;color:var(--t3)">No rules yet. Chat with Rex and use the thumbs down to teach it.</p>';
+  } else {
+    rules.forEach(function(r){
+      h += '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--su2);border:0.5px solid var(--b1);border-radius:8px;margin-bottom:6px">'
+        + '<div style="flex:1;font-size:12px;color:var(--tx);line-height:1.5">'+r.value+'</div>'
+        + '<button data-rid="'+r.id+'" onclick="rexDeleteRuleClick(this)" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;line-height:1;flex-shrink:0" onmouseover="this.style.color=\'var(--rd)\'" onmouseout="this.style.color=\'var(--t3)\'">&times;</button>'
+        + '</div>';
+    });
+  }
+  h += '<div style="font-size:12px;font-weight:700;color:var(--tx);margin:18px 0 10px">Pending Skills <span style="font-weight:400;color:var(--t3);font-size:11px">(needs code)</span></div>';
+  if(!pending.length){
+    h += '<p style="font-size:12px;color:var(--t3)">None pending.</p>';
+  } else {
+    pending.forEach(function(p){
+      var sc = p.status==='done'?'var(--grtx)':p.status==='in_progress'?'var(--amtx)':'var(--t3)';
+      h += '<div style="padding:9px 11px;background:var(--su2);border:0.5px solid var(--b1);border-radius:8px;margin-bottom:6px">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        + '<span style="font-size:10px;font-weight:700;color:'+sc+';text-transform:uppercase">'+p.status+'</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:var(--tx);margin-bottom:3px">'+p.description+'</div>'
+        + '<div style="font-size:11px;color:var(--t3)">'+p.correction+'</div>'
+        + '</div>';
+    });
+  }
+  h += '<div style="margin-top:20px;padding-top:14px;border-top:0.5px solid var(--b1)">'
+    + '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:6px">Add rule manually</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<input id="skill-manual-input" type="text" placeholder="e.g. Always use set_shift_count for shift count requests" style="flex:1;padding:7px 10px;border:0.5px solid var(--b2);border-radius:6px;background:var(--su);color:var(--tx);font-size:12px">'
+    + '<button onclick="rexAddManualRule()" style="padding:7px 14px;border:none;border-radius:6px;background:#1a2744;color:#fff;font-size:12px;cursor:pointer;font-weight:600">Add</button>'
+    + '</div></div>';
+  el.innerHTML = h;
+}
+
+function rexDeleteRuleClick(btn){
+  var id = btn.getAttribute('data-rid');
+  if(id && confirm('Delete this rule?')){ rexDeleteMemory(id); setTimeout(rexRenderSkillsSettings, 400); }
+}
+
+function rexAddManualRule(){
+  var inp = document.getElementById('skill-manual-input');
+  if(!inp || !inp.value.trim()) return;
+  rexSaveMemory('rule','manual_rule','rule_'+Date.now(), inp.value.trim(), false);
+  inp.value = '';
+  setTimeout(rexRenderSkillsSettings, 500);
 }
 
 </script>
