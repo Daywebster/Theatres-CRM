@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Atlas v130</title>
+<title>Atlas v131</title>
 <style>
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.live-dot{animation:pulse 2s infinite}
 :root{
@@ -5161,18 +5161,18 @@ function loadShiftCountFromSupabase(callback){
       if(err || !rows || !rows.length){ if(callback)callback(); return; }
       // Clear sd so Supabase is sole source of truth
       Object.keys(sd).forEach(function(k){ delete sd[k]; });
-      var skipped = 0;
+      var skipped = 0; var unmatched = [];
       rows.forEach(function(row){
         var wk = row.week_start;
         var candIdx = getCandIdx(row.candidate_name);
-        if(candIdx < 0){ skipped++; return; }
+        if(candIdx < 0){ skipped++; if(unmatched.indexOf(row.candidate_name)<0)unmatched.push(row.candidate_name); return; }
         if(!sd[wk]) sd[wk] = {};
         var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
         var dayMap = {};
         days.forEach(function(v,i){ if(v) dayMap[i] = v; });
         if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
       });
-      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]');
+      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]', unmatched);
       console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
       if(callback) callback();
     });
