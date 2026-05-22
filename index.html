@@ -5155,23 +5155,34 @@ function loadRotaFromSupabase(callback){
 
 // Load shift count from Supabase and merge into sd
 function loadShiftCountFromSupabase(callback){
-  supaFetch('GET', 'shift_count', 'select=week_start,candidate_name,mon,tue,wed,thu,fri,sat,sun', null, function(err, rows){
-    if(err || !rows || !rows.length){ if(callback)callback(); return; }
-    // Clear localStorage sd so Supabase is sole source of truth
-    Object.keys(sd).forEach(function(k){ delete sd[k]; });
-    rows.forEach(function(row){
-      var wk = row.week_start;
-      var candIdx = getCandIdx(row.candidate_name);
-      if(candIdx < 0) return;
-      if(!sd[wk]) sd[wk] = {};
-      var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
-      var dayMap = {};
-      days.forEach(function(v,i){ if(v) dayMap[i] = v; });
-      if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
+  // Ensure candidates are loaded first so getCandIdx works reliably
+  function doLoad(){
+    supaFetch('GET', 'shift_count', 'select=week_start,candidate_name,mon,tue,wed,thu,fri,sat,sun', null, function(err, rows){
+      if(err || !rows || !rows.length){ if(callback)callback(); return; }
+      // Clear sd so Supabase is sole source of truth
+      Object.keys(sd).forEach(function(k){ delete sd[k]; });
+      var skipped = 0;
+      rows.forEach(function(row){
+        var wk = row.week_start;
+        var candIdx = getCandIdx(row.candidate_name);
+        if(candIdx < 0){ skipped++; return; }
+        if(!sd[wk]) sd[wk] = {};
+        var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
+        var dayMap = {};
+        days.forEach(function(v,i){ if(v) dayMap[i] = v; });
+        if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
+      });
+      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]');
+      console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
+      if(callback) callback();
     });
-    console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
-    if(callback) callback();
-  });
+  }
+  // If candidates not yet loaded, load them first
+  if(!_supaLoaded || C.length === 0){
+    loadCandidatesFromSupabase(function(){ doLoad(); });
+  } else {
+    doLoad();
+  }
 }
 
 // ── DW Candidate ID helpers ──────────────────────────────────────────────────────────────
