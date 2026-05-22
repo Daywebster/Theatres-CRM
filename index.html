@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Atlas v132</title>
+<title>Atlas v133</title>
 <style>
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.live-dot{animation:pulse 2s infinite}
 :root{
@@ -4886,7 +4886,7 @@ function insertCandidateWithSafeId(data,callback){
 }
 
 function loadCandidatesFromSupabase(callback){
-  var params = 'select=id,dw_candidate_id,name,spec,subspecialties,status,availability_st,area,email,phone,min_day_rate,availability_pref&order=name';
+  var params = 'select=id,dw_candidate_id,name,spec,subspecialties,status,availability_st,area,email,phone,min_day_rate,availability_pref&order=name&limit=2000';
   supaFetch('GET', 'candidates', params, null, function(err, data){
     if(err || !data || !data.length){
       console.warn('Supabase candidates load failed, using local C[]', err ? err.message : 'no data');
@@ -4912,7 +4912,7 @@ function loadCandidatesFromSupabase(callback){
       };
     });
     C.length = 0;
-    newC.forEach(function(c){C.push(c);});
+    newC.forEach(function(c){if(c&&c.n)C.push(c);else console.warn('loadCandidates: skipped row',c);});
     Object.keys(candEdits).forEach(function(idx){
       if(C[idx])Object.assign(C[idx], candEdits[idx]);
     });
