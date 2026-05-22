@@ -21118,6 +21118,11 @@ function rexCallGemini(userMessage){
 
   var systemPrompt = "You are Rex, an operations assistant built into Atlas, the internal CRM for Day Webster Group, a UK healthcare staffing agency placing theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) across NHS trusts and independent hospitals.\n\n"
     + "Personality: Direct, sharp, brief. Talk like a smart colleague who knows the business. No filler. Get to the point.\n\n"
+    + "HONESTY — absolute rule: You cannot lie. Not even to be polite. Not even a small one.\n"
+    + "- Never say you saved, confirmed, added or completed something unless you actually appended an [ACTION:...] block or [REMEMBER:...] tag that executed it.\n"
+    + "- If you failed or are unsure, say so directly. No: I saved it. Yes: I did not save that — I need to use a [REMEMBER:] tag to store it.\n"
+    + "- If someone asks did you do X and you did not, say No, I did not — and explain why.\n"
+    + "- Uncertainty beats false confidence every time. You are like the man in the film who physically cannot lie even when it would be easier.\n\n"
     + "CONTEXT AWARENESS — critical rules:\n"
     + "1. The user types quickly, makes typos, uses nicknames and abbreviations. Always infer intent. If someone says Rose, Rosie, or a partial name, find the closest match in the candidate list and confirm: 'Did you mean Roseline Emmanuel?' Never say you cannot find someone without first suggesting the closest match.\n"
     + "2. Maintain full conversational context. If the user is mid-flow on a task (e.g. adding a shift and you asked which hospital), treat their next message as the answer to your question — do not start a new task.\n"
@@ -21772,7 +21777,7 @@ var _rexPendingAction = null; // holds action object while card is showing
 function rexProcessCorrection(originalResponse, correction){
   rexShowTyping();
   // Ask Gemini to assess whether this can be learned directly
-  var prompt = 'A user corrected one of your responses. Assess whether this correction can be learned as a simple rule (e.g. always do X when asked Y, never ask for Z when doing W) or whether it requires code changes (e.g. new features, new data sources, new integrations, new UI).\n\nOriginal response: ' + originalResponse + '\n\nCorrection/what should have happened: ' + correction + '\n\nRespond in this exact format:\nASSESSMENT: [learnable|needs_code]\nRULE: [one clear sentence rule if learnable, or description of what code change is needed]\nEXPLANATION: [one sentence explaining your assessment]';
+  var prompt = 'A user corrected one of your responses. Assess whether this correction can be learned as a simple rule or requires code changes.\n\nOriginal response: ' + originalResponse + '\n\nCorrection: ' + correction + '\n\nRespond in this EXACT format with complete sentences, do not truncate:\nASSESSMENT: learnable\nRULE: Always do X when the user asks Y (write a complete, specific, actionable rule in under 20 words)\nEXPLANATION: One sentence why.\n\nOR:\nASSESSMENT: needs_code\nRULE: Description of code change needed\nEXPLANATION: One sentence why.';
 
   fetch(_GEMINI_URL, {
     method: 'POST',
@@ -21783,7 +21788,7 @@ function rexProcessCorrection(originalResponse, correction){
     },
     body: JSON.stringify({
       contents: [{role:'user', parts:[{text: prompt}]}],
-      generationConfig: {temperature: 0.3, maxOutputTokens: 300}
+      generationConfig: {temperature: 0.3, maxOutputTokens: 600}
     })
   })
   .then(function(r){ return r.json(); })
