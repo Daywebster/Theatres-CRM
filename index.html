@@ -21057,6 +21057,31 @@ function rexBuildContext(){
     activeCands.forEach(function(c){ctx+='- '+(c.n||c.name)+' | '+(c.s||c.skill||'')+'\n';});
     ctx+='\n';
   }
+  // Live Placement this week
+  if(typeof getAllLP === 'function'){
+    var allLp = getAllLP();
+    var _today3 = new Date();
+    var _yr3 = _today3.getMonth()>=3 ? _today3.getFullYear() : _today3.getFullYear()-1;
+    var _apr3 = new Date(_yr3,3,1);
+    var _fyMon3 = new Date(_apr3);
+    _fyMon3.setDate(_apr3.getDate()-((_apr3.getDay()+6)%7));
+    var _curFw3 = Math.floor((_today3-_fyMon3)/(7*864e5))+1;
+    var _wkMon3 = new Date(_fyMon3.getTime()+(_curFw3-1)*7*864e5);
+    var _wkSun3 = new Date(_wkMon3.getTime()+6*864e5);
+    var _fmt3 = function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+    var _lpFwStart3 = _fmt3(_wkMon3), _lpFwEnd3 = _fmt3(_wkSun3);
+    var wkLp3 = allLp.filter(function(r){var d=r[9]||r[3]||'';return d&&d>=_lpFwStart3&&d<=_lpFwEnd3;});
+    if(wkLp3.length){
+      var lpShifts3 = wkLp3.length;
+      var lpCands3 = new Set(wkLp3.map(function(r){return r[1]||'';})).size;
+      var lpCharge3 = wkLp3.reduce(function(s,r){return s+(parseFloat(r[7])||0);},0);
+      var lpMargin3 = wkLp3.reduce(function(s,r){return s+(parseFloat(r[8])||0);},0);
+      ctx += 'LIVE PLACEMENT THIS WEEK:\n';
+      ctx += '- Shifts: '+lpShifts3+' | Candidates: '+lpCands3+'\n';
+      ctx += '- Charge: £'+Math.round(lpCharge3).toLocaleString()+' | Margin: £'+Math.round(lpMargin3).toLocaleString()+'\n\n';
+    }
+  }
+
   // NHS Leads
   if(typeof _nlLeads!=='undefined'&&_nlLeads.length){
     var newLeads=_nlLeads.filter(function(l){return l.status==='new';}).length;
