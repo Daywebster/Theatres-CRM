@@ -21125,8 +21125,13 @@ function rexCallGemini(userMessage){
     + "4. Spell corrections: assume common misspellings. Ramsay Oaks = Ramsay Oaks, East Surrey = East Surrey Hospital, etc.\n"
     + "5. Never ask for information you already have from context or prior messages.\n\n"
     + "CANDIDATE LIST (active candidates — use for name matching):\n" + candList + "\n\n"
-    + "CRM WRITES — when you have all required info, respond with a confirmation then append an action block:\n"
-    + "[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\n"
+    + "CRM WRITES — CRITICAL RULES:\n"
+    + "NEVER say a task/shift/action is done without including an [ACTION:...] block. The block is what actually saves data. Without it, nothing saves.\n"
+    + "NEVER say Done, Task added, Task created, or any completion phrase without the [ACTION:...] block on a new line immediately after.\n"
+    + "When you have all required info, write ONE brief sentence then on the next line append the action block.\n"
+    + "Example for task: Adding that now. [ACTION: {\"type\": \"create_task\", \"fields\": {\"note\": \"do a CV for John\", \"due_date\": \"2026-05-23\", \"assigned_to\": \"Rachel\"}}]\n"
+    + "Example for shift count: On it. [ACTION: {\"type\": \"set_shift_count\", \"fields\": {\"candidate\": \"Roseline Emmanuel\", \"date\": \"2026-05-23\", \"hospital\": \"Ramsay Oaks\"}}]\n"
+    + "Example for shift: Adding shift. [ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"East Surrey\", \"role\": \"Scrub\", \"date\": \"2026-05-23\", \"time_start\": \"08:00\", \"time_end\": \"18:00\", \"rate\": 350}}]\n\n"
     + "Action types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital)\n\n"
     + "For shift count requests: use set_shift_count. Only need candidate full name, date, hospital. Do NOT ask for role/times/rate.\n\n"
     + "If missing a required field, ask for it — one question at a time. Never guess rates, times or roles.\n\n"
@@ -21232,8 +21237,13 @@ function rexHandleReply(reply){
 function rexShowApprovalCard(action){
   var container = document.getElementById('rex-messages');
   if(!container)return;
+  // Remove any existing card
+  var oldCard = document.getElementById('rex-action-card');
+  if(oldCard) oldCard.remove();
 
   var card = document.createElement('div');
+  card.id = 'rex-action-card';
+  _rexPendingAction = action;
   card.style.cssText = 'margin:8px 0;border:1.5px solid #1558a0;border-radius:12px;overflow:hidden;background:var(--su)';
 
   // Card header
@@ -21277,6 +21287,7 @@ function rexShowApprovalCard(action){
   confirmBtn.style.cssText = 'flex:1;padding:7px;border:none;border-radius:8px;background:#1a2744;color:#fff;font-size:12px;font-weight:600;cursor:pointer';
   confirmBtn.textContent = 'Confirm';
   confirmBtn.onclick = function(){
+    _rexPendingAction = null;
     card.remove();
     rexExecuteAction(action);
   };
@@ -21285,6 +21296,7 @@ function rexShowApprovalCard(action){
   cancelBtn.style.cssText = 'padding:7px 14px;border:0.5px solid var(--b2);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer';
   cancelBtn.textContent = 'Cancel';
   cancelBtn.onclick = function(){
+    _rexPendingAction = null;
     card.remove();
     rexAddMessage('rex','Cancelled. Let me know if you want to try something else.');
   };
@@ -21703,12 +21715,16 @@ var _rexAwaitingCorrection = null;
 
 // Hook into rexSend to intercept corrections
 var _origRexSend = null;
+var _rexPendingAction = null; // holds action object while card is showing
+
 (function(){
   var _realSend = window.rexSend;
   window.rexSend = function(){
     var inp = document.getElementById('rex-input');
     if(!inp) return _realSend();
     var text = inp.value.trim();
+
+    // Intercept correction flow
     if(_rexAwaitingCorrection && text){
       inp.value = '';
       inp.style.height = '36px';
@@ -21718,6 +21734,35 @@ var _origRexSend = null;
       rexProcessCorrection(correction.originalResponse, text);
       return;
     }
+
+    // Intercept confirmation of pending action card
+    if(_rexPendingAction && text){
+      var confirmPhrases = /^(yes|yeah|yep|yup|do it|go ahead|confirm|ok|okay|sure|absolutely|add it|create it|save it|add that|do that|go for it)/i;
+      var cancelPhrases = /^(no|nope|cancel|stop|don't|dont|never mind|nevermind)/i;
+      if(confirmPhrases.test(text)){
+        inp.value = '';
+        inp.style.height = '36px';
+        rexAddMessage('user', text);
+        var act = _rexPendingAction;
+        _rexPendingAction = null;
+        // Remove the action card from UI
+        var card = document.getElementById('rex-action-card');
+        if(card) card.remove();
+        rexExecuteAction(act);
+        return;
+      }
+      if(cancelPhrases.test(text)){
+        inp.value = '';
+        inp.style.height = '36px';
+        rexAddMessage('user', text);
+        _rexPendingAction = null;
+        var card2 = document.getElementById('rex-action-card');
+        if(card2) card2.remove();
+        rexAddMessage('rex', 'Cancelled. Let me know if you want to try something else.');
+        return;
+      }
+    }
+
     _realSend();
   };
 })();
