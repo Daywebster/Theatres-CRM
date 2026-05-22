@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Atlas v133</title>
+<title>Atlas</title>
 <style>
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.live-dot{animation:pulse 2s infinite}
 :root{
@@ -4773,8 +4773,8 @@ var _curRotaHosp=null;
 var _editHosp=null;
 var candEdits={};
 var candFilter='active';var candSpecFilter='';
-try{var _ce=localStorage.getItem('cand_edits');if(_ce)candEdits=JSON.parse(_ce);}catch(e){}
-function saveCE(){try{localStorage.setItem('cand_edits',JSON.stringify(candEdits));}catch(e){}}
+// cand_edits localStorage disabled — edits go direct to Supabase; stale index-based data causes C[] corruption
+function saveCE(){} // no-op: cand_edits localStorage disabled
 
 // ── SUPABASE REST API (plain fetch — no SDK needed) ─────────────────────────────
 var SUPA_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co';
