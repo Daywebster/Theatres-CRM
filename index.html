@@ -20983,6 +20983,30 @@ function rexBuildContext(){
   ctx += '- Open tasks: '+myTasks.length+' ('+overdueTasks.length+' overdue)\n';
   ctx += '- Candidates available today: '+(availableToday.length?availableToday.slice(0,8).join(', '):('None marked'))+'\n\n';
 
+  // Shift count — current week per candidate
+  var scWk = wKey(wkOff);
+  var scData = sd[scWk] || {};
+  var DAYNAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var scLines = [];
+  Object.keys(scData).forEach(function(ri){
+    var cand = C[parseInt(ri)];
+    if(!cand || !cand.n) return;
+    var days = scData[ri];
+    var entries = [];
+    Object.keys(days).forEach(function(di){
+      var val = days[di];
+      if(val && val !== 'A' && val !== 'U' && val !== 'T'){
+        entries.push(DAYNAMES[parseInt(di)] + ': ' + val);
+      }
+    });
+    if(entries.length) scLines.push(cand.n + ' — ' + entries.join(', '));
+  });
+  if(scLines.length){
+    ctx += 'SHIFT COUNT THIS WEEK (' + scWk + '):\n';
+    scLines.forEach(function(l){ ctx += '- ' + l + '\n'; });
+    ctx += '\n';
+  }
+
   // Top 5 open tasks
   if(myTasks.length){
     ctx += 'OPEN TASKS (top 5):\n';
@@ -21337,25 +21361,42 @@ function rexExecuteAddShift(action){
 // ── CREATE TASK ─────────────────────────────────────────────────────────────
 function rexExecuteCreateTask(action){
   var f = action.fields || action;
-  var task = {
-    id: 'rex-'+Date.now(),
+  // Resolve assigned_to — match first name against _CONSULTANTS
+  var assignedTo = f.assigned_to || '';
+  if(assignedTo){
+    var assignLower = assignedTo.toLowerCase().trim();
+    var match = (typeof _CONSULTANTS !== 'undefined' ? _CONSULTANTS : ['Rachel','Josh','Jason'])
+      .find(function(c){ return c.toLowerCase().indexOf(assignLower) >= 0 || assignLower.indexOf(c.toLowerCase()) >= 0; });
+    if(match) assignedTo = match;
+  }
+  if(!assignedTo) assignedTo = (_currentUser&&_currentUser.name)||'';
+
+  var dueDate = f.due_date||'';
+  var supaBody = {
     note: f.note||f.description||'',
     type: f.type||'general',
-    consultant: f.assigned_to||(_currentUser&&_currentUser.name)||'',
-    due_date: f.due_date||'',
+    consultant: assignedTo,
+    due_date: dueDate,
     done: false,
-    createdAt: new Date().toISOString(),
-    createdBy: (_currentUser&&_currentUser.name)||'Rex'
+    created_date: new Date().toISOString().slice(0,10),
+    created_by: (_currentUser&&_currentUser.name)||'Rex'
   };
-  supaFetch('POST','tasks_crm',null,task,function(err){
+  supaFetch('POST','tasks_crm','',supaBody,function(err, rows){
     if(err){
       console.error('Rex create_task error [REX-004]:', err);
       rexAddMessage('rex','Failed to create the task (**Error REX-004**). Please speak to Josh to sort this.');
       return;
     }
-    _tasks.unshift(task);
-    if(typeof saveTasks==='function')saveTasks();
-    rexAddMessage('rex','**Done.** Task created: "'+task.note+'"'+(task.due_date?' due **'+task.due_date+'**':'')+'.');
+    // Push to local _tasks with correct field mapping (due not due_date)
+    var localTask = Object.assign({}, supaBody, {
+      id: (rows&&rows[0]&&rows[0].id)||('rex-'+Date.now()),
+      due: dueDate,
+      hosp: '',
+      cand: ''
+    });
+    _tasks.unshift(localTask);
+    if(typeof rTodo==='function') rTodo();
+    rexAddMessage('rex','**Done.** Task created for **'+assignedTo+'**: "'+supaBody.note+'"'+(dueDate?' due **'+dueDate+'**':'')+'.');
     showToast('Task created by Rex','success');
   });
 }
