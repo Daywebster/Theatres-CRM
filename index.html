@@ -21078,20 +21078,55 @@ function rexShowApiKeyPrompt(){
 }
 
 // ── GEMINI API CALL ──────────────────────────────────────────────────────────
+
+// Build candidate list for Rex context — full names for fuzzy matching
+function rexCandidateList(){
+  return C.filter(function(c){ return c.n && c.ac !== 'Inactive'; })
+    .map(function(c){ return c.n + (c.s ? ' (' + c.s + ')' : ''); })
+    .join(', ');
+}
+
 function rexCallGemini(userMessage){
   var ctx = rexBuildContext();
   var memCtx = rexMemoryContext();
-  // Extract hard rules separately for emphasis
   var ruleCtx = _rexMemories.filter(function(m){return m.category==="rule";}).map(function(m){return "- "+m.value;}).join("\n");
-  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital)\n\nFor shift count requests (e.g. add a shift for X at Y on date): use set_shift_count. Do NOT ask for role, times or rate \u2014 only need candidate name, date and hospital name.\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nMemory: When you learn something worth remembering about a candidate, trust, or pattern, append a memory tag on a new line:\n[REMEMBER: category|subject|key|value]\nCategories: trust, candidate, pattern, desk, personal\nExample: [REMEMBER: candidate|Roseline Emmanuel|preferred_hospital|East Surrey]\nFor private info about a specific user only: [REMEMBER_PRIVATE: key|value]\nNever share personal details about one team member with another.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx + (ruleCtx ? "\n\nRULES YOU MUST ALWAYS FOLLOW:\n" + ruleCtx : "") + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
+  var candList = rexCandidateList();
 
-  var messages = [{role:'user',parts:[{text:systemPrompt+'\n\nUser: '+userMessage}]}];
+  var systemPrompt = "You are Rex, an operations assistant built into Atlas, the internal CRM for Day Webster Group, a UK healthcare staffing agency placing theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) across NHS trusts and independent hospitals.\n\n"
+    + "Personality: Direct, sharp, brief. Talk like a smart colleague who knows the business. No filler. Get to the point.\n\n"
+    + "CONTEXT AWARENESS — critical rules:\n"
+    + "1. The user types quickly, makes typos, uses nicknames and abbreviations. Always infer intent. If someone says Rose, Rosie, or a partial name, find the closest match in the candidate list and confirm: 'Did you mean Roseline Emmanuel?' Never say you cannot find someone without first suggesting the closest match.\n"
+    + "2. Maintain full conversational context. If the user is mid-flow on a task (e.g. adding a shift and you asked which hospital), treat their next message as the answer to your question — do not start a new task.\n"
+    + "3. If the user pivots topic, follow them. If they seem to be answering your previous question, treat it as such.\n"
+    + "4. Spell corrections: assume common misspellings. Ramsay Oaks = Ramsay Oaks, East Surrey = East Surrey Hospital, etc.\n"
+    + "5. Never ask for information you already have from context or prior messages.\n\n"
+    + "CANDIDATE LIST (active candidates — use for name matching):\n" + candList + "\n\n"
+    + "CRM WRITES — when you have all required info, respond with a confirmation then append an action block:\n"
+    + "[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\n"
+    + "Action types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital)\n\n"
+    + "For shift count requests: use set_shift_count. Only need candidate full name, date, hospital. Do NOT ask for role/times/rate.\n\n"
+    + "If missing a required field, ask for it — one question at a time. Never guess rates, times or roles.\n\n"
+    + "Memory: append memory tags when you learn something useful:\n"
+    + "[REMEMBER: category|subject|key|value] — categories: trust, candidate, pattern, desk, personal\n"
+    + "[REMEMBER_PRIVATE: key|value] — private to this user only\n"
+    + "Never share personal details about one team member with another.\n\n"
+    + "Format: **bold** key names/numbers. Under 150 words unless detail needed.\n\n"
+    + "Current desk data:\n" + ctx
+    + (ruleCtx ? "\n\nRULES YOU MUST ALWAYS FOLLOW:\n" + ruleCtx : "")
+    + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
 
-  // Include recent conversation history
-  _rexMessages.slice(-6).forEach(function(m){
-    if(m.role!=='user'&&m.role!=='rex')return;
-    messages.push({role:m.role==='user'?'user':'model',parts:[{text:m.text}]});
+  // Build proper multi-turn conversation history (last 14 messages)
+  var history = _rexMessages.slice(-14).filter(function(m){ return m.role==='user'||m.role==='rex'; });
+  var contents = [];
+  // System context as first user turn
+  contents.push({role:'user', parts:[{text: systemPrompt + "\n\nConversation so far:"}]});
+  contents.push({role:'model', parts:[{text: "Understood. Ready."}]});
+  // Then actual conversation
+  history.forEach(function(m){
+    contents.push({role: m.role==='user'?'user':'model', parts:[{text: m.text}]});
   });
+  // Current message
+  contents.push({role:'user', parts:[{text: userMessage}]});
 
   fetch(_GEMINI_URL,{
     method:'POST',
@@ -21101,8 +21136,8 @@ function rexCallGemini(userMessage){
       'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
     },
     body:JSON.stringify({
-      contents:[{role:'user',parts:[{text:systemPrompt+'\n\n'+_rexMessages.slice(-6).map(function(m){return (m.role==='user'?'User':'Rex')+': '+m.text;}).join('\n')+'\nUser: '+userMessage}]}],
-      generationConfig:{temperature:0.7,maxOutputTokens:600}
+      contents: contents,
+      generationConfig:{temperature:0.5,maxOutputTokens:600}
     })
   })
   .then(function(r){return r.json();})
@@ -21509,6 +21544,33 @@ function rexMemDeleteClick(btn){
   if(id && confirm('Delete this memory?')) rexDeleteMemory(id);
 }
 
+// ── FUZZY CANDIDATE RESOLVER ────────────────────────────────────────────────
+function rexResolveCandidateName(name){
+  if(!name) return null;
+  // 1. Exact
+  var exact = C.find(function(c){ return c.n === name && c.ac !== 'Inactive'; });
+  if(exact) return exact.n;
+  // 2. Case insensitive
+  var lower = name.toLowerCase().trim();
+  var ci = C.find(function(c){ return c.n && c.n.toLowerCase().trim() === lower && c.ac !== 'Inactive'; });
+  if(ci) return ci.n;
+  // 3. First name match
+  var firstName = lower.split(' ')[0];
+  var matches = C.filter(function(c){ return c.n && c.n.toLowerCase().startsWith(firstName) && c.ac !== 'Inactive'; });
+  if(matches.length === 1) return matches[0].n;
+  if(matches.length > 1) return {ambiguous: true, matches: matches.map(function(c){ return c.n; })};
+  // 4. Fuzzy — any word in name matches
+  var words = lower.split(' ').filter(Boolean);
+  var fuzzy = C.filter(function(c){
+    if(!c.n || c.ac === 'Inactive') return false;
+    var cn = c.n.toLowerCase();
+    return words.some(function(w){ return cn.indexOf(w) >= 0 || _strDist(w, cn.split(' ').find(function(p){ return Math.abs(p.length-w.length)<=2; })||'') <= 1; });
+  });
+  if(fuzzy.length === 1) return fuzzy[0].n;
+  if(fuzzy.length > 1 && fuzzy.length <= 4) return {ambiguous: true, matches: fuzzy.map(function(c){ return c.n; })};
+  return null;
+}
+
 // ── SET SHIFT COUNT ─────────────────────────────────────────────────────────
 function rexExecuteSetShiftCount(action){
   var f = action.fields || action;
@@ -21521,6 +21583,24 @@ function rexExecuteSetShiftCount(action){
     return;
   }
 
+  // Resolve candidate name with fuzzy matching
+  var resolved = rexResolveCandidateName(candName);
+  if(!resolved){
+    rexAddMessage('rex', 'I can\'t find **' + candName + '** in the active candidates list. Can you check the spelling?');
+    return;
+  }
+  if(resolved.ambiguous){
+    var opts = resolved.matches;
+    rexAddMessage('rex', 'I found a few candidates matching **' + candName + '** — did you mean:', opts.map(function(n){
+      return {label: n, primary: false, fn: (function(nm){ return function(){
+        action.fields.candidate = nm;
+        rexExecuteSetShiftCount(action);
+      }; })(n)};
+    }));
+    return;
+  }
+  candName = resolved;
+
   // Work out week key (Monday of that week) and day index
   var d = new Date(dateStr + 'T12:00:00');
   var dow = (d.getDay() + 6) % 7; // 0=Mon, 6=Sun
@@ -21531,7 +21611,7 @@ function rexExecuteSetShiftCount(action){
   // Find candidate index
   var candIdx = getCandIdx(candName);
   if(candIdx < 0){
-    rexAddMessage('rex', 'Can\'t find **' + candName + '** in the candidates list.');
+    rexAddMessage('rex', 'Matched **' + candName + '** but couldn\'t find them in the shift count grid. Please speak to Josh.');
     return;
   }
 
