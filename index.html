@@ -318,6 +318,7 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
     <div class="nav-section-hdr" onclick="navToggle('dev-sec')"><span>&#9881; Dev</span><span class="nav-chev" id="ns-chev-dev-sec">&#9660;</span></div>
     <div class="nav-group" id="ng-dev-sec">
       <div class="ntab" id="tab-schedule" onclick="gp('schedule')">Schedule</div>
+      <div class="ntab" id="tab-rexmemory" onclick="gp('rexmemory')">Rex Memory</div>
     </div>
   </div>
 
@@ -1159,6 +1160,8 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
 <!-- PAY CALCULATOR PAGE -->
 <div class="pg" id="pg-feedback"></div>
 
+<div class="pg" id="pg-rexmemory"></div>
+
 <div class="pg" id="pg-schedule" style="flex-direction:row;overflow:hidden">
   <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
     <div style="flex-shrink:0;background:var(--su);border-bottom:0.5px solid var(--b1)">
@@ -1686,9 +1689,49 @@ function getTrust(val){
 }
 
 function getCandIdx(candName){
-  // Return index of candidate in C[] by name
+  if(!candName) return -1;
+  // 1. Exact match
   for(var i=0;i<C.length;i++){if(C[i].n===candName)return i;}
+  // 2. Case-insensitive + trimmed
+  var lower=candName.trim().toLowerCase();
+  for(var i=0;i<C.length;i++){if((C[i].n||'').trim().toLowerCase()===lower)return i;}
+  // 3. Fuzzy: ignore spaces/hyphens, so "Maduima" matches "Mudima" etc won't help
+  //    but handles double-spaces, trailing spaces, hyphen vs space
+  var norm=lower.replace(/[-\s]+/g,' ').trim();
+  for(var i=0;i<C.length;i++){
+    var cn=(C[i].n||'').trim().toLowerCase().replace(/[-\s]+/g,' ');
+    if(cn===norm)return i;
+  }
+  // 4. One-character-off fuzzy: split into parts, check all parts present
+  var parts=norm.split(' ').filter(Boolean);
+  if(parts.length>=2){
+    for(var i=0;i<C.length;i++){
+      var cn=(C[i].n||'').trim().toLowerCase();
+      // All parts must appear as substrings (handles extra/missing single char in one part)
+      var allMatch=parts.every(function(p){
+        // exact part present
+        if(cn.indexOf(p)>=0) return true;
+        // or within 1 edit distance of any word in cn
+        var cnParts=cn.split(' ').filter(Boolean);
+        return cnParts.some(function(cp){ return _strDist(p,cp)<=1; });
+      });
+      if(allMatch) return i;
+    }
+  }
   return -1;
+}
+
+// Levenshtein distance (capped at 2 for performance)
+function _strDist(a,b){
+  if(Math.abs(a.length-b.length)>2) return 99;
+  var m=a.length,n=b.length;
+  var dp=[];
+  for(var i=0;i<=m;i++){dp[i]=[i];for(var j=1;j<=n;j++)dp[i][j]=0;}
+  for(var j=0;j<=n;j++)dp[0][j]=j;
+  for(var i=1;i<=m;i++)for(var j=1;j<=n;j++){
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  }
+  return dp[m][n];
 }
 
 function getRotaIdx(trustName, candName, wk){
@@ -4733,8 +4776,8 @@ var _curRotaHosp=null;
 var _editHosp=null;
 var candEdits={};
 var candFilter='active';var candSpecFilter='';
-try{var _ce=localStorage.getItem('cand_edits');if(_ce)candEdits=JSON.parse(_ce);}catch(e){}
-function saveCE(){try{localStorage.setItem('cand_edits',JSON.stringify(candEdits));}catch(e){}}
+// cand_edits localStorage disabled — edits go direct to Supabase; stale index-based data causes C[] corruption
+function saveCE(){} // no-op: cand_edits localStorage disabled
 
 // ── SUPABASE REST API (plain fetch — no SDK needed) ─────────────────────────────
 var SUPA_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co';
@@ -4846,7 +4889,7 @@ function insertCandidateWithSafeId(data,callback){
 }
 
 function loadCandidatesFromSupabase(callback){
-  var params = 'select=id,dw_candidate_id,name,spec,subspecialties,status,availability_st,area,email,phone,min_day_rate,availability_pref&order=name';
+  var params = 'select=id,dw_candidate_id,name,spec,subspecialties,status,availability_st,area,email,phone,min_day_rate,availability_pref&order=name&limit=2000';
   supaFetch('GET', 'candidates', params, null, function(err, data){
     if(err || !data || !data.length){
       console.warn('Supabase candidates load failed, using local C[]', err ? err.message : 'no data');
@@ -4872,7 +4915,7 @@ function loadCandidatesFromSupabase(callback){
       };
     });
     C.length = 0;
-    newC.forEach(function(c){C.push(c);});
+    newC.forEach(function(c){if(c&&c.n)C.push(c);else console.warn('loadCandidates: skipped row',c);});
     Object.keys(candEdits).forEach(function(idx){
       if(C[idx])Object.assign(C[idx], candEdits[idx]);
     });
@@ -5161,18 +5204,18 @@ function loadShiftCountFromSupabase(callback){
       if(err || !rows || !rows.length){ if(callback)callback(); return; }
       // Clear sd so Supabase is sole source of truth
       Object.keys(sd).forEach(function(k){ delete sd[k]; });
-      var skipped = 0;
+      var skipped = 0; var unmatched = [];
       rows.forEach(function(row){
         var wk = row.week_start;
         var candIdx = getCandIdx(row.candidate_name);
-        if(candIdx < 0){ skipped++; return; }
+        if(candIdx < 0){ skipped++; if(unmatched.indexOf(row.candidate_name)<0)unmatched.push(row.candidate_name); return; }
         if(!sd[wk]) sd[wk] = {};
         var days = [row.mon||'', row.tue||'', row.wed||'', row.thu||'', row.fri||'', row.sat||'', row.sun||''];
         var dayMap = {};
         days.forEach(function(v,i){ if(v) dayMap[i] = v; });
         if(Object.keys(dayMap).length) sd[wk][candIdx] = dayMap;
       });
-      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]');
+      if(skipped) console.warn('loadShiftCount: skipped ' + skipped + ' rows — candidate names not found in C[]', unmatched);
       console.log('Loaded ' + rows.length + ' shift count entries from Supabase');
       if(callback) callback();
     });
@@ -20321,6 +20364,7 @@ if(typeof _origGp2==='function'&&!window._gpScheduleHooked){
     _prevGp(id);
     if(id==='schedule'){if(!_schedNotesLoaded){schedNotesLoad(function(){rSched();});}else{rSched();}}
     if(id==='nhsleads'){if(!_nlLoaded)nlLoad();else{nlRenderFilters();nlRender();}}
+    if(id==='rexmemory'){if(!_rexMemoryLoaded){rexLoadMemory(function(){rRexMemory();});}else{rRexMemory();}}
   };
 }
 
@@ -20571,6 +20615,7 @@ function rexToggle(){
   if(panel){panel.style.display = _rexOpen ? 'flex' : 'none';}
   if(_rexOpen){
     rexScan();
+    rexLoadMemory();
     // Auto-brief disabled - user can ask "What needs doing today?" manually
     setTimeout(function(){
       var inp = document.getElementById('rex-input');
@@ -20998,7 +21043,8 @@ function rexShowApiKeyPrompt(){
 // ── GEMINI API CALL ──────────────────────────────────────────────────────────
 function rexCallGemini(userMessage){
   var ctx = rexBuildContext();
-  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes)\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx;
+  var memCtx = rexMemoryContext();
+  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes)\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nMemory: When you learn something worth remembering about a candidate, trust, or pattern, append a memory tag on a new line:\n[REMEMBER: category|subject|key|value]\nCategories: trust, candidate, pattern, desk, personal\nExample: [REMEMBER: candidate|Roseline Emmanuel|preferred_hospital|East Surrey]\nFor private info about a specific user only: [REMEMBER_PRIVATE: key|value]\nNever share personal details about one team member with another.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
 
   var messages = [{role:'user',parts:[{text:systemPrompt+'\n\nUser: '+userMessage}]}];
 
@@ -21067,20 +21113,22 @@ if(document.readyState==='loading'){
 // ── REX PHASE 3: ACTION DETECTION & EXECUTION ──────────────────────────────
 
 function rexHandleReply(reply){
+  // Extract and save any memory tags first
+  rexExtractMemories(reply);
+  // Strip memory tags from display
+  var displayReply = reply.replace(/\[REMEMBER(?:_PRIVATE)?:[^\]]*\]/g,'').trim();
   // Check if reply contains a structured action block
-  // Rex signals actions with [ACTION: {...}] blocks
-  var actionMatch = reply.match(/\[ACTION:\s*(\{[\s\S]*?\})\]/);
+  var actionMatch = displayReply.match(/\[ACTION:\s*(\{[\s\S]*?\})\]/);
   if(actionMatch){
     try{
       var action = JSON.parse(actionMatch[1]);
-      var cleanReply = reply.replace(/\[ACTION:\s*\{[\s\S]*?\}\]/,'').trim();
+      var cleanReply = displayReply.replace(/\[ACTION:\s*\{[\s\S]*?\}\]/,'').trim();
       rexAddMessage('rex', cleanReply);
       rexShowApprovalCard(action);
       return;
     }catch(e){}
   }
-  // No action block - just render the reply
-  rexAddMessage('rex', reply);
+  rexAddMessage('rex', displayReply);
 }
 
 function rexShowApprovalCard(action){
@@ -21260,6 +21308,163 @@ function rexExecuteUpdateLead(action){
     rexAddMessage('rex','**Done.** Lead updated.');
     showToast('Lead updated by Rex','success');
   });
+}
+
+// ── REX MEMORY SYSTEM ────────────────────────────────────────────────────────
+
+var _rexMemories = []; // [{id, category, subject, key, value, private, owner, confidence}]
+var _rexMemoryLoaded = false;
+
+function rexLoadMemory(cb){
+  supaFetch('GET','rex_memory','select=id,category,subject,key,value,private,owner,confidence,updated_at&order=updated_at.desc&limit=200',null,function(err,rows){
+    if(err){ console.warn('Rex memory load failed:', err); if(cb)cb(); return; }
+    _rexMemories = rows || [];
+    _rexMemoryLoaded = true;
+    console.log('Rex memory: loaded ' + _rexMemories.length + ' memories');
+    if(cb)cb();
+  });
+}
+
+function rexMemoryContext(){
+  if(!_rexMemories.length) return '';
+  var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+  var lines = [];
+  _rexMemories.forEach(function(m){
+    // Skip private memories that belong to someone else
+    if(m.private && m.owner && m.owner !== currentUser) return;
+    var conf = m.confidence >= 3 ? ' (confirmed)' : '';
+    lines.push('[' + m.category + '] ' + m.subject + ' — ' + m.key + ': ' + m.value + conf);
+  });
+  return lines.join('\n');
+}
+
+function rexSaveMemory(category, subject, key, value, isPrivate, owner){
+  var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+  owner = owner || currentUser;
+  // Check if memory already exists (same category+subject+key)
+  var existing = _rexMemories.find(function(m){
+    return m.category === category && m.subject === subject && m.key === key;
+  });
+  if(existing){
+    // Upsert — increment confidence
+    var newConf = Math.min((existing.confidence || 1) + 1, 10);
+    supaFetch('PATCH','rex_memory','id=eq.'+existing.id,{value:value, confidence:newConf, updated_at:new Date().toISOString()},function(err){
+      if(!err){
+        existing.value = value;
+        existing.confidence = newConf;
+        existing.updated_at = new Date().toISOString();
+        console.log('Rex memory updated:', category, subject, key);
+      }
+    });
+  } else {
+    // Insert new
+    var body = {category:category, subject:subject, key:key, value:value, private: isPrivate||false, owner:owner, confidence:1};
+    supaFetch('POST','rex_memory','',body,function(err,rows){
+      if(!err && rows && rows[0]){
+        _rexMemories.unshift(rows[0]);
+        console.log('Rex memory saved:', category, subject, key);
+      }
+    });
+  }
+}
+
+function rexDeleteMemory(id){
+  supaFetch('DELETE','rex_memory','id=eq.'+id,null,function(err){
+    if(!err){
+      _rexMemories = _rexMemories.filter(function(m){ return m.id !== id; });
+      // Re-render if on memory page
+      if(document.getElementById('sec-rexmemory')) rRexMemory();
+      console.log('Rex memory deleted:', id);
+    }
+  });
+}
+
+function rexExtractMemories(reply){
+  // Parse [REMEMBER: category|subject|key|value]
+  var re = /\[REMEMBER:\s*([^|\]]+)\|([^|\]]+)\|([^|\]]+)\|([^\]]+)\]/g;
+  var m;
+  while((m = re.exec(reply)) !== null){
+    var cat = m[1].trim(), subj = m[2].trim(), k = m[3].trim(), v = m[4].trim();
+    rexSaveMemory(cat, subj, k, v, false);
+  }
+  // Parse [REMEMBER_PRIVATE: key|value]
+  var re2 = /\[REMEMBER_PRIVATE:\s*([^|\]]+)\|([^\]]+)\]/g;
+  while((m = re2.exec(reply)) !== null){
+    var k2 = m[1].trim(), v2 = m[2].trim();
+    var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+    rexSaveMemory('personal', currentUser, k2, v2, true, currentUser);
+  }
+}
+
+// ── REX MEMORY PAGE ──────────────────────────────────────────────────────────
+
+function rRexMemory(){
+  var sec = document.getElementById('pg-rexmemory');
+  if(!sec) return;
+  var filterCat = sec._filterCat || 'all';
+  var cats = ['all','trust','candidate','pattern','desk','personal'];
+  var catCounts = {};
+  cats.forEach(function(c){ catCounts[c] = c === 'all' ? _rexMemories.length : _rexMemories.filter(function(m){ return m.category === c; }).length; });
+  var filtered = filterCat === 'all' ? _rexMemories : _rexMemories.filter(function(m){ return m.category === filterCat; });
+
+  var html = '<div style="padding:20px 24px;max-width:860px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
+    + '<div><span style="font-size:17px;font-weight:700;color:var(--tx)">Rex Memory</span>'
+    + '<span style="margin-left:10px;font-size:12px;color:var(--t3);background:var(--su2);padding:2px 8px;border-radius:10px">'+_rexMemories.length+' memories</span></div>'
+    + '<button onclick="rexLoadMemory(function(){rRexMemory();})" style="padding:5px 14px;border:0.5px solid var(--b2);border-radius:7px;background:var(--su);color:var(--t2);font-size:12px;cursor:pointer">Refresh</button>'
+    + '</div>';
+
+  // Filter pills
+  html += '<div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">';
+  cats.forEach(function(c){
+    var active = filterCat === c;
+    var bc = active ? '#1558a0' : 'var(--b2)';
+    var bg2 = active ? '#1558a0' : 'var(--su)';
+    var col = active ? '#fff' : 'var(--t2)';
+    var fw = active ? '600' : '400';
+    var label = c.charAt(0).toUpperCase()+c.slice(1)+(catCounts[c] ? ' ('+catCounts[c]+')' : '');
+    html += '<button data-rmcat="'+c+'" onclick="rexMemFilterClick(this)" style="padding:4px 12px;border-radius:20px;border:0.5px solid '+bc+';background:'+bg2+';color:'+col+';font-size:12px;cursor:pointer;font-weight:'+fw+'">'+label+'</button>';
+  });
+  html += '</div>';
+
+  if(!filtered.length){
+    html += '<div style="color:var(--t3);font-size:13px;padding:40px 0;text-align:center">'
+      + (filterCat === 'all' ? 'No memories yet. Rex will build these up as you chat.' : 'No '+filterCat+' memories yet.')
+      + '</div>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:8px">';
+    filtered.forEach(function(m){
+      var confDots = '';
+      for(var i=0;i<5;i++){
+        confDots += '<span style="width:6px;height:6px;border-radius:50%;background:'+(i < Math.min(m.confidence||1,5) ? '#1558a0' : 'var(--b2)')+';display:inline-block;margin-right:2px"></span>';
+      }
+      html += '<div style="background:var(--su);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+        + '<span style="font-size:10px;font-weight:600;background:var(--blbg);color:#1558a0;padding:2px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em">'+m.category+'</span>'
+        + '<span style="font-size:12px;font-weight:600;color:var(--tx)">'+m.subject+'</span>'
+        + (m.private ? '<span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:6px;font-weight:600">Private</span>' : '')
+        + '</div>'
+        + '<div style="font-size:13px;color:var(--t2)"><span style="color:var(--t3)">'+m.key+':</span> '+m.value+'</div>'
+        + '<div style="margin-top:6px;display:flex;align-items:center;gap:8px">'+confDots
+        + '<span style="font-size:10px;color:var(--t3)">confidence</span></div>'
+        + '</div>'
+        + '<button data-memid="'+m.id+'" onclick="rexMemDeleteClick(this)" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;flex-shrink:0" onmouseover="this.style.color=\'var(--rd)\'" onmouseout="this.style.color=\'var(--t3)\'">&times;</button>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  sec.innerHTML = html;
+}
+
+function rexMemFilterClick(btn){
+  var sec = document.getElementById('pg-rexmemory');
+  if(sec){ sec._filterCat = btn.getAttribute('data-rmcat'); rRexMemory(); }
+}
+function rexMemDeleteClick(btn){
+  var id = btn.getAttribute('data-memid');
+  if(id && confirm('Delete this memory?')) rexDeleteMemory(id);
 }
 
 </script>
