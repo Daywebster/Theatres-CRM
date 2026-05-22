@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Atlas v131</title>
+<title>Atlas v132</title>
 <style>
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.live-dot{animation:pulse 2s infinite}
 :root{
@@ -1686,9 +1686,49 @@ function getTrust(val){
 }
 
 function getCandIdx(candName){
-  // Return index of candidate in C[] by name
+  if(!candName) return -1;
+  // 1. Exact match
   for(var i=0;i<C.length;i++){if(C[i].n===candName)return i;}
+  // 2. Case-insensitive + trimmed
+  var lower=candName.trim().toLowerCase();
+  for(var i=0;i<C.length;i++){if((C[i].n||'').trim().toLowerCase()===lower)return i;}
+  // 3. Fuzzy: ignore spaces/hyphens, so "Maduima" matches "Mudima" etc won't help
+  //    but handles double-spaces, trailing spaces, hyphen vs space
+  var norm=lower.replace(/[-\s]+/g,' ').trim();
+  for(var i=0;i<C.length;i++){
+    var cn=(C[i].n||'').trim().toLowerCase().replace(/[-\s]+/g,' ');
+    if(cn===norm)return i;
+  }
+  // 4. One-character-off fuzzy: split into parts, check all parts present
+  var parts=norm.split(' ').filter(Boolean);
+  if(parts.length>=2){
+    for(var i=0;i<C.length;i++){
+      var cn=(C[i].n||'').trim().toLowerCase();
+      // All parts must appear as substrings (handles extra/missing single char in one part)
+      var allMatch=parts.every(function(p){
+        // exact part present
+        if(cn.indexOf(p)>=0) return true;
+        // or within 1 edit distance of any word in cn
+        var cnParts=cn.split(' ').filter(Boolean);
+        return cnParts.some(function(cp){ return _strDist(p,cp)<=1; });
+      });
+      if(allMatch) return i;
+    }
+  }
   return -1;
+}
+
+// Levenshtein distance (capped at 2 for performance)
+function _strDist(a,b){
+  if(Math.abs(a.length-b.length)>2) return 99;
+  var m=a.length,n=b.length;
+  var dp=[];
+  for(var i=0;i<=m;i++){dp[i]=[i];for(var j=1;j<=n;j++)dp[i][j]=0;}
+  for(var j=0;j<=n;j++)dp[0][j]=j;
+  for(var i=1;i<=m;i++)for(var j=1;j<=n;j++){
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  }
+  return dp[m][n];
 }
 
 function getRotaIdx(trustName, candName, wk){
