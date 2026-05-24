@@ -318,6 +318,7 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
     <div class="nav-section-hdr" onclick="navToggle('dev-sec')"><span>&#9881; Dev</span><span class="nav-chev" id="ns-chev-dev-sec">&#9660;</span></div>
     <div class="nav-group" id="ng-dev-sec">
       <div class="ntab" id="tab-schedule" onclick="gp('schedule')">Schedule</div>
+      <div class="ntab" id="tab-rexmemory" onclick="gp('rexmemory')">Rex Memory</div>
     </div>
   </div>
 
@@ -1158,6 +1159,8 @@ nav{background:#0d1b3e!important;border-bottom:none!important;box-shadow:2px 0 8
 
 <!-- PAY CALCULATOR PAGE -->
 <div class="pg" id="pg-feedback"></div>
+
+<div class="pg" id="pg-rexmemory"></div>
 
 <div class="pg" id="pg-schedule" style="flex-direction:row;overflow:hidden">
   <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
@@ -2207,7 +2210,7 @@ function rDash(){
 
   }
   // Div Con condensed - rows: {cand, client, date, hrs, pay, charge, margin, cons}
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   var dcEl=document.getElementById('dv-dc-last');
   if(dcEl){
     if(!_dcReports.length){
@@ -2248,7 +2251,7 @@ function rDashTrendChart(){
     });});
     shiftData.push({wk:wk,shifts:tot});
   }
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   var dcByWk={};
   _dcReports.forEach(function(r){
     var total=r.rows.reduce(function(s,row){return s+row.margin;},0);
@@ -9696,7 +9699,6 @@ function loadTasks(callback){
           assignedTo:assigned,createdBy:r.created_by||'',
           forwardHistory:r.forward_history||[]};
       });
-      try{localStorage.setItem('dw_tasks',JSON.stringify(_tasks));}catch(e){}
       console.log('Loaded '+_tasks.length+' tasks from Supabase');
     updateTabTitle();
     // Start real-time subscriptions for all high-value tables
@@ -9708,9 +9710,7 @@ function loadTasks(callback){
   });
 }
 
-function saveTasks(){
-  try{localStorage.setItem('dw_tasks',JSON.stringify(_tasks));}catch(e){}
-}
+function saveTasks(){} // no-op: tasks saved individually via saveTaskEntry to Supabase
 
 function saveRecurring(){
   try{localStorage.setItem('dw_recurring',JSON.stringify(_recurring));}catch(e){}
@@ -10617,7 +10617,7 @@ function loadDocs(callback){
   });
 }
 
-function saveDocs(){try{localStorage.setItem('dw_docs',JSON.stringify(_docs));}catch(e){}}
+function saveDocs(){} // no-op: documents saved individually via saveDocToSupabase
 
 function saveDocToSupabase(doc,callback){
   var body={id:doc.id,name:doc.name,type:doc.type,tag:doc.tag||'Other',
@@ -10978,13 +10978,12 @@ function loadPQ(callback){
         latestUpdate:r.latest_update||'',nextActionFor:r.next_action_for||'',
         status:r.status||'open',agent:r.agent||'',created:r.created_date||''};
     });
-    try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}
     console.log('Loaded '+_pq.length+' pay queries from Supabase');
     if(callback)callback();
   });
 }
 
-function savePQ(){try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}}
+function savePQ(){} // no-op: pay queries saved individually via savePQEntry to Supabase
 
 function savePQEntry(q,callback){
   console.log('savePQEntry called, id='+q.id);
@@ -11603,10 +11602,9 @@ var _dcFilter={q:'',client:'',showNeg:false};
 
 
 
-function loadDC(){try{var d=localStorage.getItem('dw_divcon');if(d)_dcReports=JSON.parse(d);}catch(e){}}
+function loadDC(){} // localStorage disabled — use loadDCFromSupabase()
 function saveDC(){
-  // Save to localStorage as backup
-  try{localStorage.setItem('dw_divcon',JSON.stringify(_dcReports));}catch(e){}
+  // Save to Supabase only — localStorage removed
   // Save to Supabase - upsert each report by week_label
   _dcReports.forEach(function(rep){
     supaFetch('POST','divcon_reports','on_conflict=week_label',{
@@ -11625,8 +11623,7 @@ function loadDCFromSupabase(callback){
     _dcReports=data.map(function(r){
       return{weekLabel:r.week_label,imported:r.imported,rows:JSON.parse(r.rows||'[]')};
     });
-    // Also persist to localStorage
-    try{localStorage.setItem('dw_divcon',JSON.stringify(_dcReports));}catch(e){}
+    // localStorage write removed — Supabase is source of truth
     console.log('Loaded',_dcReports.length,'div con reports from Supabase');
     if(callback)callback();
   });
@@ -11640,7 +11637,6 @@ function deleteDCFromSupabase(weekLabel){
 function rDivCon(){
   if(!_dcLoaded){
     _dcLoaded=true;
-    loadDC(); // load from localStorage immediately so UI isn't blank
     loadDCFromSupabase(function(){rDivCon();});
     return;
   }
@@ -11965,7 +11961,7 @@ function loadDCMap(){try{var d=localStorage.getItem('dw_dcmap');if(d)_dcMap=JSON
 function saveDCMap(){try{localStorage.setItem('dw_dcmap',JSON.stringify(_dcMap));}catch(e){}}
 
 function dcShowMapping(){
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   loadDCMap();
   // Collect all unique client names across all reports
   var allClients={};
@@ -12083,7 +12079,7 @@ function loadPipe(callback){
   });
 }
 
-function savePipe(){try{localStorage.setItem('dw_pipeline',JSON.stringify(_pipe));}catch(e){}}
+function savePipe(){} // no-op: pipeline saved individually via savePipeEntry to Supabase
 
 function savePipeEntry(p,callback){
   var body={id:p.id,name:p.name,role:p.role||'',sub_spec:p.subSpec||'',
@@ -13823,7 +13819,7 @@ function tsmSubmit(){
 function showCandHistory(idx){
   var candName=(C[idx]&&C[idx].n)||'Candidate';
   var ex=document.getElementById('cand-history-modal');if(ex)ex.remove();
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
 
   var MONTHS3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var DAYS3=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -17729,7 +17725,7 @@ function resetHotkeys(){
 }
 
 function settingsTab(tab){
-  var tabs=['hotkeys','users'];
+  var tabs=['hotkeys','users','skills'];
   tabs.forEach(function(t){
     var btn=document.getElementById('stab-'+t);
     var content=document.getElementById('stab-content-'+t);
@@ -17738,6 +17734,7 @@ function settingsTab(tab){
     if(content)content.style.display=active?'':'none';
   });
   if(tab==='users') usersLoadList();
+  if(tab==='skills') rexRenderSkillsSettings();
 }
 
 function toggleSettings(){
@@ -19807,6 +19804,7 @@ function chatSubscribeRealtime(){}
     <div style="display:flex;gap:0;border-bottom:0.5px solid var(--b1);margin:0 -20px;padding:0 20px" id="settings-tabs">
       <button onclick="settingsTab('hotkeys')" id="stab-hotkeys" style="padding:7px 14px;border:none;border-bottom:2px solid var(--bl);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--bl);margin-bottom:-0.5px">Hotkeys</button>
       <button onclick="settingsTab('users')" id="stab-users" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--t3);margin-bottom:-0.5px;display:none" id="stab-users">Team</button>
+      <button onclick="settingsTab('skills')" id="stab-skills" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--t3);margin-bottom:-0.5px">Learned Skills</button>
     </div>
   </div>
 
@@ -19818,6 +19816,9 @@ function chatSubscribeRealtime(){}
       <button onclick="resetHotkeys()" style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--r);background:transparent;cursor:pointer;font-size:12px;color:var(--t3)" onmouseover="this.style.background='var(--su2)'" onmouseout="this.style.background='transparent'">Reset to defaults</button>
     </div>
   </div>
+
+  <!-- Tab: Learned Skills -->
+  <div id="stab-content-skills" style="display:none;flex:1;overflow-y:auto;padding:16px 20px"></div>
 
   <!-- Tab: Team Users (admin only) -->
   <div id="stab-content-users" style="display:none;flex:1;overflow-y:auto;padding:16px 20px">
@@ -20202,7 +20203,7 @@ function schedCurrentBlock(day){
 var _schedNotes={},_schedNotesLoaded=false;
 function schedNotesLoad(cb){
   if(!_currentUser)return;
-  supaGet('schedule_notes','user_id=eq.'+_currentUser.id+'&select=day_index,block_index,note',function(rows){
+  supaFetch('GET','schedule_notes','user_id=eq.'+_currentUser.id+'&select=day_index,block_index,note',null,function(err,rows){
     _schedNotes={};(rows||[]).forEach(function(r){_schedNotes[r.day_index+':'+r.block_index]=r.note||'';});
     _schedNotesLoaded=true;if(cb)cb();
   });
@@ -20361,6 +20362,7 @@ if(typeof _origGp2==='function'&&!window._gpScheduleHooked){
     _prevGp(id);
     if(id==='schedule'){if(!_schedNotesLoaded){schedNotesLoad(function(){rSched();});}else{rSched();}}
     if(id==='nhsleads'){if(!_nlLoaded)nlLoad();else{nlRenderFilters();nlRender();}}
+    if(id==='rexmemory'){if(!_rexMemoryLoaded){rexLoadMemory(function(){rRexMemory();});}else{rRexMemory();}}
   };
 }
 
@@ -20600,8 +20602,14 @@ var _rexOpen = false;
 var _rexMessages = []; // {role, text, ts, actions}
 var _rexNudges = [];
 var _rexScanning = false;
+var _rexCandPatterns = null;
 var _rexApiKey = 'via-supabase'; // Key stored securely in Supabase Edge Function
 var _rexLastScan = 0;
+var _rexBriefedMorning = false;
+var _rexBriefedAfternoon = false;
+var _rexLastBriefDate = '';
+var _rexMorningItems = [];
+var _rexWeekItems = {};
 var _GEMINI_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co/functions/v1/smooth-api?action=gemini';
 
 // ── Toggle panel ────────────────────────────────────────────────────────────
@@ -20611,7 +20619,8 @@ function rexToggle(){
   if(panel){panel.style.display = _rexOpen ? 'flex' : 'none';}
   if(_rexOpen){
     rexScan();
-    // Auto-brief disabled - user can ask "What needs doing today?" manually
+    rexLoadMemory();
+    rexCheckBrief();
     setTimeout(function(){
       var inp = document.getElementById('rex-input');
       if(inp)inp.focus();
@@ -20637,6 +20646,7 @@ function rexScan(){
   if(_rexScanning)return;
   _rexScanning = true;
   _rexNudges = [];
+  var _rexDcSummary = null;
   var now = new Date();
   var todayStr = now.toISOString().slice(0,10);
   var tomorrowD = new Date(now); tomorrowD.setDate(now.getDate()+1);
@@ -20741,6 +20751,261 @@ function rexScan(){
     }
   }
 
+  // ── MODULE 1: Financial Anomaly Detection (Div Con) ─────────────────────
+  if(typeof _dcReports !== 'undefined' && _dcReports.length){
+    // Load all rows across all reports for full context
+    var allDcRows = [];
+    _dcReports.forEach(function(rep){
+      (rep.rows||[]).forEach(function(r){
+        allDcRows.push(Object.assign({}, r, {weekLabel: rep.weekLabel}));
+      });
+    });
+
+    // Sort reports newest first
+    var sortedRpts = _dcReports.slice().sort(function(a,b){return (b.weekLabel||'').localeCompare(a.weekLabel||'');});
+    var latestRpt = sortedRpts[0];
+    var prevRpt = sortedRpts[1];
+
+    if(latestRpt && latestRpt.rows){
+      var latestRows = latestRpt.rows;
+
+      // 1a. Paid but not charged (pay > 0, charge = 0)
+      var paidNotCharged = latestRows.filter(function(r){
+        return (r.pay||0) > 0 && (r.charge||0) === 0;
+      });
+      if(paidNotCharged.length){
+        _rexNudges.push({
+          priority: 1,
+          icon: '&#9888;',
+          col: '#dc2626',
+          bg: '#fef2f2',
+          title: paidNotCharged.length + ' row'+(paidNotCharged.length>1?'s':'')+' paid but not charged',
+          body: paidNotCharged.slice(0,3).map(function(r){
+            return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' — pay £'+(r.pay||0).toFixed(0)+', charge £0';
+          }).join(' · '),
+          action: {label:'View Div Con', fn:'gp("divcon")'}
+        });
+      }
+
+      // 1b. Negative margin rows
+      var negMargin = latestRows.filter(function(r){ return (r.margin||0) < 0; });
+      if(negMargin.length){
+        _rexNudges.push({
+          priority: 1,
+          icon: '&#128308;',
+          col: '#dc2626',
+          bg: '#fef2f2',
+          title: negMargin.length + ' negative margin row'+(negMargin.length>1?'s':''),
+          body: negMargin.slice(0,3).map(function(r){
+            return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' — margin £'+(r.margin||0).toFixed(0)+' (pay £'+(r.pay||0).toFixed(0)+', charge £'+(r.charge||0).toFixed(0)+')';
+          }).join(' · '),
+          action: {label:'View Div Con', fn:'gp("divcon")'}
+        });
+      }
+
+      // 1c. Very low margin % (>0 but <10%)
+      var lowMargin = latestRows.filter(function(r){
+        var ch = r.charge||0; var mg = r.margin||0;
+        return ch > 0 && mg >= 0 && (mg/ch) < 0.10;
+      });
+      if(lowMargin.length){
+        _rexNudges.push({
+          priority: 2,
+          icon: '&#128993;',
+          col: '#d97706',
+          bg: '#fffbeb',
+          title: lowMargin.length + ' low margin row'+(lowMargin.length>1?'s':'')+' (<10%)',
+          body: lowMargin.slice(0,3).map(function(r){
+            var pct = r.charge>0 ? Math.round((r.margin/r.charge)*100) : 0;
+            return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' — '+pct+'% (£'+Math.round(r.margin||0)+')';
+          }).join(' · '),
+          action: {label:'View Div Con', fn:'gp("divcon")'}
+        });
+      }
+
+      // 1d. Zero hours but has charge or pay
+      var zeroHrs = latestRows.filter(function(r){
+        return (r.hrs||0) === 0 && ((r.pay||0) > 0 || (r.charge||0) > 0);
+      });
+      if(zeroHrs.length){
+        _rexNudges.push({
+          priority: 2,
+          icon: '&#10067;',
+          col: '#7c3aed',
+          bg: '#f5f3ff',
+          title: zeroHrs.length + ' row'+(zeroHrs.length>1?'s':'')+' with 0 hours but financial values',
+          body: zeroHrs.slice(0,3).map(function(r){
+            return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' — 0hrs, pay £'+(r.pay||0).toFixed(0)+', charge £'+(r.charge||0).toFixed(0);
+          }).join(' · '),
+          action: {label:'View Div Con', fn:'gp("divcon")'}
+        });
+      }
+
+      // 1e. Week on week margin drop >15%
+      if(prevRpt && prevRpt.rows){
+        var latestTotal = latestRows.reduce(function(s,r){return s+(r.margin||0);},0);
+        var prevTotal = prevRpt.rows.reduce(function(s,r){return s+(r.margin||0);},0);
+        if(prevTotal > 0){
+          var marginDrop = (prevTotal - latestTotal) / prevTotal;
+          if(marginDrop > 0.15){
+            _rexNudges.push({
+              priority: 2,
+              icon: '&#128201;',
+              col: '#d97706',
+              bg: '#fffbeb',
+              title: 'Margin down '+Math.round(marginDrop*100)+'% vs last week',
+              body: latestRpt.weekLabel+': £'+Math.round(latestTotal).toLocaleString()+' vs '+prevRpt.weekLabel+': £'+Math.round(prevTotal).toLocaleString(),
+              action: {label:'View Div Con', fn:'gp("divcon")'}
+            });
+          }
+        }
+      }
+
+      // 1f. Cross-check: candidates in Div Con but missing from Live Placement
+      if(typeof getAllLP === 'function'){
+        var allLp2 = getAllLP();
+        var lpKeys = new Set(allLp2.map(function(r){
+          return (r[1]||'').toLowerCase().trim() + '|' + (r[9]||r[3]||'');
+        }));
+        var dcNotInLp = latestRows.filter(function(r){
+          var k = (r.cand||'').toLowerCase().trim() + '|' + (r.date||'');
+          return !lpKeys.has(k) && (r.charge||0) > 0;
+        });
+        if(dcNotInLp.length > 0 && dcNotInLp.length < 20){
+          _rexNudges.push({
+            priority: 3,
+            icon: '&#128269;',
+            col: '#1558a0',
+            bg: '#e8f0fa',
+            title: dcNotInLp.length+' Div Con row'+(dcNotInLp.length>1?'s':'')+' not in Live Placement',
+            body: dcNotInLp.slice(0,3).map(function(r){
+              return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date;
+            }).join(' · '),
+            action: {label:'View Div Con', fn:'gp("divcon")'}
+          });
+        }
+      }
+    }
+
+    // 1g. Add div con summary to rexBuildContext data store for deep questions
+    _rexDcSummary = {
+      weeks: sortedRpts.length,
+      latest: latestRpt ? {
+        week: latestRpt.weekLabel,
+        rows: (latestRpt.rows||[]).length,
+        totalMargin: (latestRpt.rows||[]).reduce(function(s,r){return s+(r.margin||0);},0),
+        totalCharge: (latestRpt.rows||[]).reduce(function(s,r){return s+(r.charge||0);},0),
+        totalPay: (latestRpt.rows||[]).reduce(function(s,r){return s+(r.pay||0);},0),
+        totalHrs: (latestRpt.rows||[]).reduce(function(s,r){return s+(r.hrs||0);},0),
+        negCount: (latestRpt.rows||[]).filter(function(r){return (r.margin||0)<0;}).length
+      } : null
+    };
+  }
+
+  // ── MODULE 2: Candidate Pattern Detection ───────────────────────────────────
+  try {
+    var _sdWeeks = Object.keys(sd).sort(); // all weeks in shift count, oldest first
+    var _recentWeeks = _sdWeeks.slice(-8); // last 8 weeks
+    var _thisWk = wKey(wkOff);
+    var _lastWk = _sdWeeks[_sdWeeks.indexOf(_thisWk) - 1] || '';
+
+    if(_recentWeeks.length >= 3){
+      // Build pattern per candidate: how many days booked per week over recent history
+      var _candPatterns = {}; // candIdx -> {avgDays, weeklyDays:[{wk, days, hospitals}], usualHospitals:{hosp:count}}
+
+      C.forEach(function(cand, ri){
+        if(!cand || !cand.n || cand.ac === 'Inactive') return;
+
+        var weeklyData = [];
+        var hospCounts = {};
+
+        _recentWeeks.forEach(function(wk){
+          var wkData = sd[wk] && sd[wk][ri] ? sd[wk][ri] : {};
+          var bookedDays = 0;
+          var hospitals = [];
+          Object.keys(wkData).forEach(function(di){
+            var val = wkData[di];
+            if(val && val !== 'A' && val !== 'U' && val !== 'T' && val !== ''){
+              bookedDays++;
+              hospitals.push(val);
+              hospCounts[val] = (hospCounts[val] || 0) + 1;
+            }
+          });
+          weeklyData.push({wk: wk, days: bookedDays, hospitals: hospitals});
+        });
+
+        var totalDays = weeklyData.reduce(function(s, w){ return s + w.days; }, 0);
+        var avgDays = totalDays / weeklyData.length;
+        var activeWeeks = weeklyData.filter(function(w){ return w.days > 0; }).length;
+
+        if(activeWeeks >= 3){ // only track candidates who regularly work
+          _candPatterns[ri] = {
+            name: cand.n,
+            spec: cand.s || '',
+            avgDays: avgDays,
+            activeWeeks: activeWeeks,
+            weeklyData: weeklyData,
+            usualHospitals: hospCounts
+          };
+        }
+      });
+
+      // Find candidates who usually work but have gone quiet (0 days last 1-2 weeks)
+      var _quietCands = [];
+      Object.keys(_candPatterns).forEach(function(ri){
+        var p = _candPatterns[ri];
+        if(p.avgDays < 1) return; // not a regular worker
+        
+        // Check last 2 weeks
+        var lastTwo = p.weeklyData.slice(-2);
+        var recentDays = lastTwo.reduce(function(s, w){ return s + w.days; }, 0);
+        var prevAvg = p.weeklyData.slice(0, -2).reduce(function(s, w){ return s + w.days; }, 0) / Math.max(p.weeklyData.length - 2, 1);
+        
+        if(recentDays === 0 && prevAvg >= 2){
+          var topHosp = Object.keys(p.usualHospitals).sort(function(a,b){
+            return p.usualHospitals[b] - p.usualHospitals[a];
+          }).slice(0, 2).join(', ');
+          _quietCands.push({
+            name: p.name,
+            spec: p.spec,
+            avgDays: Math.round(prevAvg * 10) / 10,
+            topHospitals: topHosp,
+            weeksQuiet: lastTwo.filter(function(w){ return w.days === 0; }).length
+          });
+        }
+      });
+
+      if(_quietCands.length){
+        _rexNudges.push({
+          priority: 2,
+          icon: '&#128683;',
+          col: '#d97706',
+          bg: '#fffbeb',
+          title: _quietCands.length + ' regular candidate'+ (_quietCands.length > 1 ? 's' : '') + ' not booked recently',
+          body: _quietCands.slice(0, 4).map(function(c){
+            return c.name + ' (' + c.spec + ') — usually ' + c.avgDays + ' days/wk @ ' + (c.topHospitals || 'various') + ', quiet for ' + c.weeksQuiet + ' wk' + (c.weeksQuiet > 1 ? 's' : '');
+          }).join(' · '),
+          action: {label: 'View Shift Count', fn: 'gp("shifts")'}
+        });
+      }
+
+      // Find candidates working significantly MORE than usual (spike)
+      var _spikeCands = [];
+      Object.keys(_candPatterns).forEach(function(ri){
+        var p = _candPatterns[ri];
+        var thisWkData = p.weeklyData[p.weeklyData.length - 1];
+        if(!thisWkData) return;
+        var prevAvg = p.weeklyData.slice(0, -1).reduce(function(s, w){ return s + w.days; }, 0) / Math.max(p.weeklyData.length - 1, 1);
+        if(thisWkData.days >= 5 && prevAvg < 3){
+          _spikeCands.push({name: p.name, spec: p.spec, days: thisWkData.days, avg: Math.round(prevAvg * 10) / 10});
+        }
+      });
+
+      // Add candidate patterns to context
+      _rexCandPatterns = _candPatterns;
+    }
+  } catch(e){ console.warn('Rex Module 2 error:', e); }
+
   // ── 6. Candidates available today but not booked on matching vacancy ──────
   var todayDow = now.getDay();
   var todayDi = todayDow === 0 ? 6 : todayDow - 1;
@@ -20774,21 +21039,14 @@ function rexScan(){
 
   // Update badge
   var badge = document.getElementById('rex-nudge-badge');
-  if(badge){
-    if(_rexNudges.length){
-      badge.style.display='flex';
-      badge.textContent=_rexNudges.length;
-    } else {
-      badge.style.display='none';
-    }
-  }
+  if(badge) badge.style.display = 'none'; // Badge hidden — alerts via daily brief
 
   // Update status line
   var sl = document.getElementById('rex-status-line');
   if(sl){
     sl.textContent = _rexNudges.length
-      ? _rexNudges.length+' thing'+ (_rexNudges.length>1?'s':'')+' need attention'
-      : 'All clear \u2713';
+      ? _rexNudges.length+' alert'+ (_rexNudges.length>1?'s':'')+' — ask Rex for details'
+      : 'All clear ✓';
   }
 
   _rexScanning = false;
@@ -20796,8 +21054,10 @@ function rexScan(){
 }
 
 function rexRenderNudges(){
+  // Nudge strip disabled — Rex delivers alerts via daily brief instead
   var el = document.getElementById('rex-nudges');
-  if(!el)return;
+  if(el) el.style.display = 'none';
+  return;
   if(!_rexNudges.length){el.style.display='none';return;}
   el.style.display='block';
   el.innerHTML='<div style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3)">Needs attention</div>'
@@ -20869,7 +21129,39 @@ function rexRenderMessage(msg){
   }
 
   wrap.appendChild(bubble);
-  container.appendChild(wrap);
+
+  // Feedback buttons on Rex messages only
+  if(!isUser){
+    var msgId = 'rex-msg-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+    wrap.setAttribute('data-msgid', msgId);
+    var fbDiv = document.createElement('div');
+    fbDiv.style.cssText = 'display:flex;gap:4px;margin-top:4px;margin-left:36px';
+    var shortText = msg.text.replace(/['"]/g,'').slice(0,150);
+    var upBtn = document.createElement('button');
+    upBtn.setAttribute('data-msgid', msgId);
+    upBtn.setAttribute('data-msgtext', shortText);
+    upBtn.onclick = function(){ rexThumbsUp(this); };
+    upBtn.title = 'Good response';
+    upBtn.innerHTML = '&#128077;';
+    upBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;opacity:.4;padding:2px 4px;border-radius:4px;transition:opacity .15s';
+    upBtn.onmouseover = function(){ this.style.opacity='1'; };
+    upBtn.onmouseout = function(){ if(!this.classList.contains('active'))this.style.opacity='.4'; };
+    var dnBtn = document.createElement('button');
+    dnBtn.setAttribute('data-msgid', msgId);
+    dnBtn.setAttribute('data-msgtext', shortText);
+    dnBtn.onclick = function(){ rexThumbsDown(this); };
+    dnBtn.title = 'Wrong response';
+    dnBtn.innerHTML = '&#128078;';
+    dnBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;opacity:.4;padding:2px 4px;border-radius:4px;transition:opacity .15s';
+    dnBtn.onmouseover = function(){ this.style.opacity='1'; };
+    dnBtn.onmouseout = function(){ if(!this.classList.contains('active'))this.style.opacity='.4'; };
+    fbDiv.appendChild(upBtn);
+    fbDiv.appendChild(dnBtn);
+    container.appendChild(wrap);
+    container.appendChild(fbDiv);
+  } else {
+    container.appendChild(wrap);
+  }
   container.scrollTop=container.scrollHeight;
 }
 
@@ -20941,11 +21233,36 @@ function rexBuildContext(){
   ctx += '- Open tasks: '+myTasks.length+' ('+overdueTasks.length+' overdue)\n';
   ctx += '- Candidates available today: '+(availableToday.length?availableToday.slice(0,8).join(', '):('None marked'))+'\n\n';
 
-  // Top 5 open tasks
+  // Shift count — current week per candidate
+  var scWk = wKey(wkOff);
+  var scData = sd[scWk] || {};
+  var DAYNAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var scLines = [];
+  Object.keys(scData).forEach(function(ri){
+    var cand = C[parseInt(ri)];
+    if(!cand || !cand.n) return;
+    var days = scData[ri];
+    var entries = [];
+    Object.keys(days).forEach(function(di){
+      var val = days[di];
+      if(val && val !== 'A' && val !== 'U' && val !== 'T'){
+        entries.push(DAYNAMES[parseInt(di)] + ': ' + val);
+      }
+    });
+    if(entries.length) scLines.push(cand.n + ' — ' + entries.join(', '));
+  });
+  if(scLines.length){
+    ctx += 'SHIFT COUNT THIS WEEK (' + scWk + '):\n';
+    scLines.forEach(function(l){ ctx += '- ' + l + '\n'; });
+    ctx += '\n';
+  }
+
+  // Open tasks — full detail
   if(myTasks.length){
-    ctx += 'OPEN TASKS (top 5):\n';
-    myTasks.slice(0,5).forEach(function(t){
-      ctx += '- '+(t.note||t.type||'Task')+(t.due_date?' [due '+t.due_date+']':'')+(t.due_date&&t.due_date<todayStr?' OVERDUE':'')+'\n';
+    ctx += 'OPEN TASKS ('+myTasks.length+' total, '+overdueTasks.length+' overdue):\n';
+    myTasks.slice(0,10).forEach(function(t){
+      var isOverdue=t.due&&t.due<todayStr;
+      ctx += '- ['+(t.consultant||'?')+'] '+(t.note||t.type||'Task')+(t.due?' [due '+t.due+']':'')+(isOverdue?' ⚠ OVERDUE':'')+'\n';
     });
     ctx += '\n';
   }
@@ -20991,11 +21308,197 @@ function rexBuildContext(){
     activeCands.forEach(function(c){ctx+='- '+(c.n||c.name)+' | '+(c.s||c.skill||'')+'\n';});
     ctx+='\n';
   }
-  // NHS Leads
+  // Div Con deep context
+  if(typeof _dcReports !== 'undefined' && _dcReports.length){
+    var _dcSorted = _dcReports.slice().sort(function(a,b){return (b.weekLabel||'').localeCompare(a.weekLabel||'');});
+    var _dcLatest = _dcSorted[0];
+    var _dcPrev = _dcSorted[1];
+    if(_dcLatest && _dcLatest.rows){
+      var _dcRows = _dcLatest.rows;
+      var _dcTotalMargin = _dcRows.reduce(function(s,r){return s+(r.margin||0);},0);
+      var _dcTotalCharge = _dcRows.reduce(function(s,r){return s+(r.charge||0);},0);
+      var _dcTotalPay = _dcRows.reduce(function(s,r){return s+(r.pay||0);},0);
+      var _dcTotalHrs = _dcRows.reduce(function(s,r){return s+(r.hrs||0);},0);
+      var _dcNeg = _dcRows.filter(function(r){return (r.margin||0)<0;});
+      var _dcLowMg = _dcRows.filter(function(r){var ch=r.charge||0;var mg=r.margin||0;return ch>0&&mg>=0&&(mg/ch)<0.10;});
+      var _dcPaidNotCharged = _dcRows.filter(function(r){return (r.pay||0)>0&&(r.charge||0)===0;});
+      ctx += 'DIV CON — LATEST WEEK ('+_dcLatest.weekLabel+'):\n';
+      ctx += '- Rows: '+_dcRows.length+' | Margin: £'+Math.round(_dcTotalMargin).toLocaleString()+' | Charge: £'+Math.round(_dcTotalCharge).toLocaleString()+' | Pay: £'+Math.round(_dcTotalPay).toLocaleString()+' | Hours: '+Math.round(_dcTotalHrs)+'h\n';
+      ctx += '- Margin %: '+((_dcTotalCharge>0)?Math.round((_dcTotalMargin/_dcTotalCharge)*100)+'%':'N/A')+'\n';
+      if(_dcNeg.length) ctx += '- ⚠ NEGATIVE MARGIN ROWS ('+_dcNeg.length+'): '+_dcNeg.map(function(r){return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' margin £'+Math.round(r.margin||0)+' (pay £'+Math.round(r.pay||0)+', charge £'+Math.round(r.charge||0)+', '+( r.hrs||0)+'h)';}).join(' | ')+'\n';
+      if(_dcLowMg.length) ctx += '- ⚠ LOW MARGIN ROWS <10% ('+_dcLowMg.length+'): '+_dcLowMg.slice(0,5).map(function(r){var pct=r.charge>0?Math.round((r.margin/r.charge)*100):0;return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' '+pct+'% (£'+Math.round(r.margin||0)+')';}).join(' | ')+'\n';
+      if(_dcPaidNotCharged.length) ctx += '- ⚠ PAID NOT CHARGED ('+_dcPaidNotCharged.length+'): '+_dcPaidNotCharged.slice(0,5).map(function(r){return (r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' pay £'+Math.round(r.pay||0);}).join(' | ')+'\n';
+      // Per candidate breakdown
+      var _dcByCand = {};
+      _dcRows.forEach(function(r){
+        var k=r.cand||'?';
+        if(!_dcByCand[k])_dcByCand[k]={margin:0,charge:0,pay:0,hrs:0,rows:0,hospitals:[]};
+        _dcByCand[k].margin+=r.margin||0;
+        _dcByCand[k].charge+=r.charge||0;
+        _dcByCand[k].pay+=r.pay||0;
+        _dcByCand[k].hrs+=r.hrs||0;
+        _dcByCand[k].rows++;
+        if(r.client&&_dcByCand[k].hospitals.indexOf(r.client)<0)_dcByCand[k].hospitals.push(r.client);
+      });
+      ctx += '- CANDIDATES THIS WEEK:\n';
+      Object.keys(_dcByCand).sort(function(a,b){return _dcByCand[b].margin-_dcByCand[a].margin;}).forEach(function(cand){
+        var d=_dcByCand[cand];
+        ctx += '  '+cand+': £'+Math.round(d.margin)+' margin / £'+Math.round(d.charge)+' charge / £'+Math.round(d.pay)+' pay / '+Math.round(d.hrs)+'h @ '+d.hospitals.join(', ')+'\n';
+      });
+      // Week on week
+      if(_dcPrev && _dcPrev.rows){
+        var _dcPrevMargin=_dcPrev.rows.reduce(function(s,r){return s+(r.margin||0);},0);
+        var _dcDiff=_dcTotalMargin-_dcPrevMargin;
+        ctx += '- VS LAST WEEK ('+_dcPrev.weekLabel+'): £'+Math.round(_dcPrevMargin).toLocaleString()+' → £'+Math.round(_dcTotalMargin).toLocaleString()+' ('+(_dcDiff>=0?'+':'')+Math.round(_dcDiff).toLocaleString()+')'+'\n';
+      }
+      ctx += '\n';
+    }
+    // Historical trend — all weeks summary + full anomaly cross-reference
+    if(_dcSorted.length > 1){
+      ctx += 'DIV CON ALL WEEKS SUMMARY ('+_dcSorted.length+' weeks on record):\n';
+      _dcSorted.forEach(function(rep){
+        var rows = rep.rows||[];
+        var mg=rows.reduce(function(s,r){return s+(r.margin||0);},0);
+        var ch=rows.reduce(function(s,r){return s+(r.charge||0);},0);
+        var py=rows.reduce(function(s,r){return s+(r.pay||0);},0);
+        var hrs=rows.reduce(function(s,r){return s+(r.hrs||0);},0);
+        var pct=ch>0?Math.round((mg/ch)*100):0;
+        var neg=rows.filter(function(r){return (r.margin||0)<0;}).length;
+        var pnc=rows.filter(function(r){return (r.pay||0)>0&&(r.charge||0)===0;}).length;
+        ctx += rep.weekLabel+': £'+Math.round(mg).toLocaleString()+' margin ('+pct+'%) | charge £'+Math.round(ch).toLocaleString()+' | pay £'+Math.round(py).toLocaleString()+' | '+Math.round(hrs)+'h | '+rows.length+' rows'+(neg?' | '+neg+' neg':'')+( pnc?' | '+pnc+' paid-not-charged':'')+'\n';
+      });
+      ctx += '\n';
+
+      // Cross-reference: candidates with negative margin across ANY week
+      var negByCand = {};
+      _dcSorted.forEach(function(rep){
+        (rep.rows||[]).forEach(function(r){
+          if((r.margin||0) < 0){
+            var k = r.cand||'?';
+            if(!negByCand[k]) negByCand[k] = [];
+            negByCand[k].push({week:rep.weekLabel, client:r.client||'?', date:r.date||'?', margin:r.margin||0, pay:r.pay||0, charge:r.charge||0, hrs:r.hrs||0});
+          }
+        });
+      });
+      var negCands = Object.keys(negByCand);
+      if(negCands.length){
+        ctx += 'CANDIDATES WITH NEGATIVE MARGIN (ANY WEEK):\n';
+        negCands.forEach(function(cand){
+          var entries = negByCand[cand];
+          ctx += cand+' ('+entries.length+' occurrence'+(entries.length>1?'s':'')+'):\n';
+          entries.forEach(function(e){
+            ctx += '  '+e.week+' | '+e.client+' | '+e.date+' | margin £'+Math.round(e.margin)+' | pay £'+Math.round(e.pay)+' | charge £'+Math.round(e.charge)+' | '+e.hrs+'h\n';
+          });
+        });
+        ctx += '\n';
+      }
+
+      // Cross-reference: paid but not charged across ANY week
+      var pncByCand = {};
+      _dcSorted.forEach(function(rep){
+        (rep.rows||[]).forEach(function(r){
+          if((r.pay||0)>0 && (r.charge||0)===0){
+            var k = r.cand||'?';
+            if(!pncByCand[k]) pncByCand[k] = [];
+            pncByCand[k].push({week:rep.weekLabel, client:r.client||'?', date:r.date||'?', pay:r.pay||0, hrs:r.hrs||0});
+          }
+        });
+      });
+      var pncCands = Object.keys(pncByCand);
+      if(pncCands.length){
+        ctx += 'CANDIDATES PAID BUT NOT CHARGED (ANY WEEK):\n';
+        pncCands.forEach(function(cand){
+          var entries = pncByCand[cand];
+          var totalPay = entries.reduce(function(s,e){return s+e.pay;},0);
+          ctx += cand+' — '+entries.length+' row'+(entries.length>1?'s':'')+', total unpaid charge: £'+Math.round(totalPay).toLocaleString()+'\n';
+          entries.forEach(function(e){
+            ctx += '  '+e.week+' | '+e.client+' | '+e.date+' | pay £'+Math.round(e.pay)+'\n';
+          });
+        });
+        ctx += '\n';
+      }
+    }
+  }
+
+  // Live Placement this week
+  if(typeof getAllLP === 'function'){
+    var allLp = getAllLP();
+    var _today3 = new Date();
+    var _yr3 = _today3.getMonth()>=3 ? _today3.getFullYear() : _today3.getFullYear()-1;
+    var _apr3 = new Date(_yr3,3,1);
+    var _fyMon3 = new Date(_apr3);
+    _fyMon3.setDate(_apr3.getDate()-((_apr3.getDay()+6)%7));
+    var _curFw3 = Math.floor((_today3-_fyMon3)/(7*864e5))+1;
+    var _wkMon3 = new Date(_fyMon3.getTime()+(_curFw3-1)*7*864e5);
+    var _wkSun3 = new Date(_wkMon3.getTime()+6*864e5);
+    var _fmt3 = function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+    var _lpFwStart3 = _fmt3(_wkMon3), _lpFwEnd3 = _fmt3(_wkSun3);
+    var wkLp3 = allLp.filter(function(r){var d=r[9]||r[3]||'';return d&&d>=_lpFwStart3&&d<=_lpFwEnd3;});
+    if(wkLp3.length){
+      var lpShifts3 = wkLp3.length;
+      var lpCands3 = new Set(wkLp3.map(function(r){return r[1]||'';})).size;
+      var lpCharge3 = wkLp3.reduce(function(s,r){return s+(parseFloat(r[7])||0);},0);
+      var lpMargin3 = wkLp3.reduce(function(s,r){return s+(parseFloat(r[8])||0);},0);
+      ctx += 'LIVE PLACEMENT THIS WEEK:\n';
+      ctx += '- Shifts: '+lpShifts3+' | Candidates: '+lpCands3+'\n';
+      ctx += '- Charge: £'+Math.round(lpCharge3).toLocaleString()+' | Margin: £'+Math.round(lpMargin3).toLocaleString()+'\n\n';
+    }
+  }
+
+  // NHS Leads — detailed breakdown
   if(typeof _nlLeads!=='undefined'&&_nlLeads.length){
-    var newLeads=_nlLeads.filter(function(l){return l.status==='new';}).length;
-    var contactedLeads=_nlLeads.filter(function(l){return l.status==='contacted';}).length;
-    ctx+='NHS LEADS: '+_nlLeads.length+' total | '+newLeads+' new | '+contactedLeads+' contacted\n';
+    var nlNew=_nlLeads.filter(function(l){return l.status==='new';});
+    var nlContacted=_nlLeads.filter(function(l){return l.status==='contacted';}).length;
+    var nlConverted=_nlLeads.filter(function(l){return l.status==='converted';}).length;
+    var nlNotInt=_nlLeads.filter(function(l){return l.status==='not_interested';}).length;
+    // This week leads
+    var _wkAgo=new Date(); _wkAgo.setDate(_wkAgo.getDate()-7);
+    var _wkAgoStr=_wkAgo.toISOString().slice(0,10);
+    var nlThisWeek=_nlLeads.filter(function(l){return (l.created_at||'').slice(0,10)>=_wkAgoStr;});
+    ctx+='NHS LEADS: '+_nlLeads.length+' total | '+nlNew.length+' new | '+nlContacted+' contacted | '+nlConverted+' converted | '+nlNotInt+' not interested\n';
+    ctx+='NHS LEADS THIS WEEK: '+nlThisWeek.length+' new leads scraped\n';
+    if(nlNew.length){
+      ctx+='NEW LEADS (first 5):\n';
+      nlNew.slice(0,5).forEach(function(l){
+        ctx+='- '+(l.name||l.title||'Unknown')+' | '+(l.role||l.spec||'')+' | '+(l.trust||l.hospital||'')+' | '+(l.location||'')+'\n';
+      });
+    }
+    ctx+='\n';
+  }
+
+  // Candidate patterns context
+  if(typeof _rexCandPatterns !== 'undefined' && _rexCandPatterns){
+    var _cpKeys = Object.keys(_rexCandPatterns);
+    if(_cpKeys.length){
+      ctx += 'CANDIDATE WORKING PATTERNS (last 8 weeks):\n';
+      _cpKeys.forEach(function(ri){
+        var p = _rexCandPatterns[ri];
+        var topHosps = Object.keys(p.usualHospitals).sort(function(a,b){
+          return p.usualHospitals[b] - p.usualHospitals[a];
+        }).slice(0,3).map(function(h){
+          return h + '(' + p.usualHospitals[h] + 'd)';
+        }).join(', ');
+        var recent = p.weeklyData.slice(-3).map(function(w){
+          return w.wk.slice(5) + ':' + (w.days > 0 ? w.days + 'd' : '-');
+        }).join(' ');
+        ctx += p.name + ' (' + p.spec + '): avg ' + Math.round(p.avgDays * 10) / 10 + ' days/wk | usual: ' + (topHosps || 'various') + ' | recent: ' + recent + '\n';
+      });
+      ctx += '\n';
+    }
+  }
+
+  // Available candidates — fuller list
+  var availThisWeek=[];
+  var _sdWk=sd[wKey(wkOff)]||{};
+  C.forEach(function(c,ri){
+    if(!c||!c.n||c.ac==='Inactive')return;
+    var dayData=_sdWk[ri]||{};
+    var hasAvail=Object.values(dayData).some(function(v){return (v||'').toUpperCase()==='A';});
+    var hasBooked=Object.values(dayData).some(function(v){return v&&v!=='A'&&v!=='U'&&v!=='T';});
+    if(hasAvail&&!hasBooked) availThisWeek.push(c.n+(c.s?' ('+c.s+')':''));
+  });
+  if(availThisWeek.length){
+    ctx+='CANDIDATES AVAILABLE THIS WEEK (not booked): '+availThisWeek.slice(0,10).join(', ')+'\n\n';
   }
   return ctx;
 }
@@ -21036,17 +21539,65 @@ function rexShowApiKeyPrompt(){
 }
 
 // ── GEMINI API CALL ──────────────────────────────────────────────────────────
+
+// Build candidate list for Rex context — full names for fuzzy matching
+function rexCandidateList(){
+  return C.filter(function(c){ return c.n && c.ac !== 'Inactive'; })
+    .map(function(c){ return c.n + (c.s ? ' (' + c.s + ')' : ''); })
+    .join(', ');
+}
+
 function rexCallGemini(userMessage){
   var ctx = rexBuildContext();
-  var systemPrompt = "You are Rex, an operations assistant built into Atlas — the internal CRM for Day Webster Group, a UK healthcare staffing agency specialising in theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) placed across NHS trusts and independent hospitals.\n\nPersonality: Direct, sharp, brief. You talk like a smart colleague who knows the business. No filler phrases. Get to the point. If something needs doing now, say so.\n\nFor CRM writes: when you have all the information needed, respond with a brief confirmation sentence then append an action block on a new line in this exact format:\n[ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"..\", \"role\": \"..\", \"date\": \"YYYY-MM-DD\", \"time_start\": \"HH:MM\", \"time_end\": \"HH:MM\", \"rate\": 00}}]\n\nAction types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes)\n\nIf you are missing any required field, ask for it before appending the action block. Never guess rates, times or roles.\n\nFormat: Use **bold** for key names/numbers. Under 150 words unless detail is needed.\n\nCurrent desk data:\n" + ctx;
+  var memCtx = rexMemoryContext();
+  var ruleCtx = _rexMemories.filter(function(m){return m.category==="rule";}).map(function(m){return "- "+m.value;}).join("\n");
+  var candList = rexCandidateList();
 
-  var messages = [{role:'user',parts:[{text:systemPrompt+'\n\nUser: '+userMessage}]}];
+  var systemPrompt = "You are Rex, an operations assistant built into Atlas, the internal CRM for Day Webster Group, a UK healthcare staffing agency placing theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) across NHS trusts and independent hospitals.\n\n"
+    + "Personality: Direct, sharp, brief. Talk like a smart colleague who knows the business. No filler. Get to the point.\n\n"
+    + "HONESTY — absolute rule: You cannot lie. Not even to be polite. Not even a small one.\n"
+    + "- Never say you saved, confirmed, added or completed something unless you actually appended an [ACTION:...] block or [REMEMBER:...] tag that executed it.\n"
+    + "- If you failed or are unsure, say so directly. No: I saved it. Yes: I did not save that — I need to use a [REMEMBER:] tag to store it.\n"
+    + "- If someone asks did you do X and you did not, say No, I did not — and explain why.\n"
+    + "- Uncertainty beats false confidence every time. You are like the man in the film who physically cannot lie even when it would be easier.\n\n"
+    + "CONTEXT AWARENESS — critical rules:\n"
+    + "1. The user types quickly, makes typos, uses nicknames and abbreviations. Always infer intent. If someone says Rose, Rosie, or a partial name, find the closest match in the candidate list and confirm: 'Did you mean Roseline Emmanuel?' Never say you cannot find someone without first suggesting the closest match.\n"
+    + "2. Maintain full conversational context. If the user is mid-flow on a task (e.g. adding a shift and you asked which hospital), treat their next message as the answer to your question — do not start a new task.\n"
+    + "3. If the user pivots topic, follow them. If they seem to be answering your previous question, treat it as such.\n"
+    + "4. Spell corrections: assume common misspellings. Ramsay Oaks = Ramsay Oaks, East Surrey = East Surrey Hospital, etc.\n"
+    + "5. Never ask for information you already have from context or prior messages.\n\n"
+    + "CANDIDATE LIST (active candidates — use for name matching):\n" + candList + "\n\n"
+    + "CRM WRITES — CRITICAL RULES:\n"
+    + "NEVER say a task/shift/action is done without including an [ACTION:...] block. The block is what actually saves data. Without it, nothing saves.\n"
+    + "NEVER say Done, Task added, Task created, or any completion phrase without the [ACTION:...] block on a new line immediately after.\n"
+    + "When you have all required info, write ONE brief sentence then on the next line append the action block.\n"
+    + "Example for task: Adding that now. [ACTION: {\"type\": \"create_task\", \"fields\": {\"note\": \"do a CV for John\", \"due_date\": \"2026-05-23\", \"assigned_to\": \"Rachel\"}}]\n"
+    + "Example for shift count: On it. [ACTION: {\"type\": \"set_shift_count\", \"fields\": {\"candidate\": \"Roseline Emmanuel\", \"date\": \"2026-05-23\", \"hospital\": \"Ramsay Oaks\"}}]\n"
+    + "Example for shift: Adding shift. [ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"East Surrey\", \"role\": \"Scrub\", \"date\": \"2026-05-23\", \"time_start\": \"08:00\", \"time_end\": \"18:00\", \"rate\": 350}}]\n\n"
+    + "Action types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital), complete_task (fields: note — description of task to mark done, assigned_to — optional consultant name)\n\n"
+    + "For shift count requests: use set_shift_count. Only need candidate full name, date, hospital. Do NOT ask for role/times/rate.\n\n"
+    + "If missing a required field, ask for it — one question at a time. Never guess rates, times or roles.\n\n"
+    + "Memory: append memory tags when you learn something useful:\n"
+    + "[REMEMBER: category|subject|key|value] — categories: trust, candidate, pattern, desk, personal\n"
+    + "[REMEMBER_PRIVATE: key|value] — private to this user only\n"
+    + "Never share personal details about one team member with another.\n\n"
+    + "Format: **bold** key names/numbers. Under 150 words unless detail needed.\n\n"
+    + "Current desk data:\n" + ctx
+    + (ruleCtx ? "\n\nRULES YOU MUST ALWAYS FOLLOW:\n" + ruleCtx : "")
+    + (memCtx ? "\n\nWhat Rex remembers:\n" + memCtx : "");
 
-  // Include recent conversation history
-  _rexMessages.slice(-6).forEach(function(m){
-    if(m.role!=='user'&&m.role!=='rex')return;
-    messages.push({role:m.role==='user'?'user':'model',parts:[{text:m.text}]});
+  // Build proper multi-turn conversation history (last 14 messages)
+  var history = _rexMessages.slice(-14).filter(function(m){ return m.role==='user'||m.role==='rex'; });
+  var contents = [];
+  // System context as first user turn
+  contents.push({role:'user', parts:[{text: systemPrompt + "\n\nConversation so far:"}]});
+  contents.push({role:'model', parts:[{text: "Understood. Ready."}]});
+  // Then actual conversation
+  history.forEach(function(m){
+    contents.push({role: m.role==='user'?'user':'model', parts:[{text: m.text}]});
   });
+  // Current message
+  contents.push({role:'user', parts:[{text: userMessage}]});
 
   fetch(_GEMINI_URL,{
     method:'POST',
@@ -21056,8 +21607,8 @@ function rexCallGemini(userMessage){
       'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
     },
     body:JSON.stringify({
-      contents:[{role:'user',parts:[{text:systemPrompt+'\n\n'+_rexMessages.slice(-6).map(function(m){return (m.role==='user'?'User':'Rex')+': '+m.text;}).join('\n')+'\nUser: '+userMessage}]}],
-      generationConfig:{temperature:0.7,maxOutputTokens:600}
+      contents: contents,
+      generationConfig:{temperature:0.5,maxOutputTokens:600}
     })
   })
   .then(function(r){return r.json();})
@@ -21107,34 +21658,42 @@ if(document.readyState==='loading'){
 // ── REX PHASE 3: ACTION DETECTION & EXECUTION ──────────────────────────────
 
 function rexHandleReply(reply){
+  // Extract and save any memory tags first
+  rexExtractMemories(reply);
+  // Strip memory tags from display
+  var displayReply = reply.replace(/\[REMEMBER(?:_PRIVATE)?:[^\]]*\]/g,'').trim();
   // Check if reply contains a structured action block
-  // Rex signals actions with [ACTION: {...}] blocks
-  var actionMatch = reply.match(/\[ACTION:\s*(\{[\s\S]*?\})\]/);
+  var actionMatch = displayReply.match(/\[ACTION:\s*(\{[\s\S]*?\})\]/);
   if(actionMatch){
     try{
       var action = JSON.parse(actionMatch[1]);
-      var cleanReply = reply.replace(/\[ACTION:\s*\{[\s\S]*?\}\]/,'').trim();
+      var cleanReply = displayReply.replace(/\[ACTION:\s*\{[\s\S]*?\}\]/,'').trim();
       rexAddMessage('rex', cleanReply);
       rexShowApprovalCard(action);
       return;
     }catch(e){}
   }
-  // No action block - just render the reply
-  rexAddMessage('rex', reply);
+  rexAddMessage('rex', displayReply);
 }
 
 function rexShowApprovalCard(action){
   var container = document.getElementById('rex-messages');
   if(!container)return;
+  // Remove any existing card
+  var oldCard = document.getElementById('rex-action-card');
+  if(oldCard) oldCard.remove();
 
   var card = document.createElement('div');
-  card.style.cssText = 'margin:8px 0;border:1.5px solid #1558a0;border-radius:12px;overflow:hidden;background:var(--su)';
+  card.id = 'rex-action-card';
+  _rexPendingAction = action;
+  card.style.cssText = 'margin:8px 0;border:1.5px solid #1558a0;border-radius:12px;overflow:hidden;background:var(--su);max-width:100%;box-sizing:border-box;width:100%';
 
   // Card header
   var hdr = document.createElement('div');
   hdr.style.cssText = 'background:#1a2744;padding:10px 14px;display:flex;align-items:center;gap:8px';
   hdr.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
-    + '<span style="font-size:11px;font-weight:700;color:#fff;letter-spacing:.04em">ACTION REQUIRED</span>';
+    + '<span style="font-size:11px;font-weight:700;color:#fff;letter-spacing:.04em">ACTION REQUIRED</span>'
+    + '<span style="font-size:10px;color:rgba(255,255,255,.5);margin-left:auto">or type \'yeah\'</span>';
   card.appendChild(hdr);
 
   // Card body - show action details
@@ -21145,7 +21704,9 @@ function rexShowApprovalCard(action){
     'add_shift': 'Add Cascade Shift',
     'create_task': 'Create Task',
     'update_lead': 'Update NHS Lead',
-    'mark_available': 'Mark Candidate Available'
+    'mark_available': 'Mark Candidate Available',
+    'set_shift_count': 'Add to Shift Count',
+    'complete_task': 'Mark Task Complete'
   }[action.type] || action.type;
 
   var detailsHtml = '<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">'+typeLabel+'</div>';
@@ -21164,12 +21725,13 @@ function rexShowApprovalCard(action){
 
   // Buttons
   var btns = document.createElement('div');
-  btns.style.cssText = 'padding:10px 14px;display:flex;gap:8px;border-top:0.5px solid var(--b1)';
+  btns.style.cssText = 'padding:10px 14px;display:flex;gap:8px;border-top:0.5px solid var(--b1);flex-wrap:wrap';
 
   var confirmBtn = document.createElement('button');
-  confirmBtn.style.cssText = 'flex:1;padding:7px;border:none;border-radius:8px;background:#1a2744;color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  confirmBtn.style.cssText = 'flex:1;min-width:80px;padding:7px;border:none;border-radius:8px;background:#1a2744;color:#fff;font-size:12px;font-weight:600;cursor:pointer';
   confirmBtn.textContent = 'Confirm';
   confirmBtn.onclick = function(){
+    _rexPendingAction = null;
     card.remove();
     rexExecuteAction(action);
   };
@@ -21178,6 +21740,7 @@ function rexShowApprovalCard(action){
   cancelBtn.style.cssText = 'padding:7px 14px;border:0.5px solid var(--b2);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer';
   cancelBtn.textContent = 'Cancel';
   cancelBtn.onclick = function(){
+    _rexPendingAction = null;
     card.remove();
     rexAddMessage('rex','Cancelled. Let me know if you want to try something else.');
   };
@@ -21191,6 +21754,8 @@ function rexShowApprovalCard(action){
 
 function rexExecuteAction(action){
   var type = action.type;
+  // Audit log every action
+  rexAuditLog(type, action.fields || action, true, 'pending');
 
   if(type === 'add_shift'){
     rexExecuteAddShift(action);
@@ -21198,7 +21763,12 @@ function rexExecuteAction(action){
     rexExecuteCreateTask(action);
   } else if(type === 'update_lead'){
     rexExecuteUpdateLead(action);
+  } else if(type === 'set_shift_count'){
+    rexExecuteSetShiftCount(action);
+  } else if(type === 'complete_task'){
+    rexExecuteCompleteTask(action);
   } else {
+    rexAuditLog(type, action.fields || action, true, 'unknown_action_type');
     rexAddMessage('rex', 'I don\'t know how to execute that action yet. Please speak to Josh to sort this.');
   }
 }
@@ -21252,25 +21822,43 @@ function rexExecuteAddShift(action){
 // ── CREATE TASK ─────────────────────────────────────────────────────────────
 function rexExecuteCreateTask(action){
   var f = action.fields || action;
-  var task = {
-    id: 'rex-'+Date.now(),
+  // Resolve assigned_to — match first name against _CONSULTANTS
+  var assignedTo = f.assigned_to || '';
+  if(assignedTo){
+    var assignLower = assignedTo.toLowerCase().trim();
+    var match = (typeof _CONSULTANTS !== 'undefined' ? _CONSULTANTS : ['Rachel','Josh','Jason'])
+      .find(function(c){ return c.toLowerCase().indexOf(assignLower) >= 0 || assignLower.indexOf(c.toLowerCase()) >= 0; });
+    if(match) assignedTo = match;
+  }
+  if(!assignedTo) assignedTo = (_currentUser&&_currentUser.name)||'';
+
+  var dueDate = f.due_date||'';
+  var supaBody = {
     note: f.note||f.description||'',
     type: f.type||'general',
-    consultant: f.assigned_to||(_currentUser&&_currentUser.name)||'',
-    due_date: f.due_date||'',
+    consultant: assignedTo,
+    due_date: dueDate,
     done: false,
-    createdAt: new Date().toISOString(),
-    createdBy: (_currentUser&&_currentUser.name)||'Rex'
+    created_date: new Date().toISOString().slice(0,10),
+    created_by: (_currentUser&&_currentUser.name)||'Rex'
   };
-  supaFetch('POST','tasks_crm',null,task,function(err){
+  // Do not send id — let Supabase generate a UUID
+  supaFetch('POST','tasks_crm','select=id',supaBody,function(err, rows){
     if(err){
       console.error('Rex create_task error [REX-004]:', err);
       rexAddMessage('rex','Failed to create the task (**Error REX-004**). Please speak to Josh to sort this.');
       return;
     }
-    _tasks.unshift(task);
-    if(typeof saveTasks==='function')saveTasks();
-    rexAddMessage('rex','**Done.** Task created: "'+task.note+'"'+(task.due_date?' due **'+task.due_date+'**':'')+'.');
+    // Push to local _tasks with correct field mapping (due not due_date)
+    var localTask = Object.assign({}, supaBody, {
+      id: (rows&&rows[0]&&rows[0].id)||('rex-'+Date.now()),
+      due: dueDate,
+      hosp: '',
+      cand: ''
+    });
+    _tasks.unshift(localTask);
+    if(typeof rTodo==='function') rTodo();
+    rexAddMessage('rex','**Done.** Task created for **'+assignedTo+'**: "'+supaBody.note+'"'+(dueDate?' due **'+dueDate+'**':'')+'.');
     showToast('Task created by Rex','success');
   });
 }
@@ -21302,6 +21890,704 @@ function rexExecuteUpdateLead(action){
   });
 }
 
+// ── REX MEMORY SYSTEM ────────────────────────────────────────────────────────
+
+var _rexMemories = []; // [{id, category, subject, key, value, private, owner, confidence}]
+var _rexMemoryLoaded = false;
+
+function rexLoadMemory(cb){
+  supaFetch('GET','rex_memory','select=id,category,subject,key,value,private,owner,confidence,updated_at&order=updated_at.desc&limit=200',null,function(err,rows){
+    if(err){ console.warn('Rex memory load failed:', err); if(cb)cb(); return; }
+    _rexMemories = rows || [];
+    _rexMemoryLoaded = true;
+    console.log('Rex memory: loaded ' + _rexMemories.length + ' memories');
+    if(cb)cb();
+  });
+}
+
+function rexMemoryContext(){
+  if(!_rexMemories.length) return '';
+  var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+  var lines = [];
+  _rexMemories.forEach(function(m){
+    // Skip private memories that belong to someone else
+    if(m.private && m.owner && m.owner !== currentUser) return;
+    var conf = m.confidence >= 3 ? ' (confirmed)' : '';
+    lines.push('[' + m.category + '] ' + m.subject + ' — ' + m.key + ': ' + m.value + conf);
+  });
+  return lines.join('\n');
+}
+
+function rexSaveMemory(category, subject, key, value, isPrivate, owner){
+  var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+  owner = owner || currentUser;
+  // Check if memory already exists (same category+subject+key)
+  var existing = _rexMemories.find(function(m){
+    return m.category === category && m.subject === subject && m.key === key;
+  });
+  if(existing){
+    // Upsert — increment confidence
+    var newConf = Math.min((existing.confidence || 1) + 1, 10);
+    supaFetch('PATCH','rex_memory','id=eq.'+existing.id,{value:value, confidence:newConf, updated_at:new Date().toISOString()},function(err){
+      if(!err){
+        existing.value = value;
+        existing.confidence = newConf;
+        existing.updated_at = new Date().toISOString();
+        console.log('Rex memory updated:', category, subject, key);
+      }
+    });
+  } else {
+    // Insert new
+    var body = {category:category, subject:subject, key:key, value:value, private: isPrivate||false, owner:owner, confidence:1};
+    supaFetch('POST','rex_memory','',body,function(err,rows){
+      if(!err && rows && rows[0]){
+        _rexMemories.unshift(rows[0]);
+        console.log('Rex memory saved:', category, subject, key);
+      }
+    });
+  }
+}
+
+function rexDeleteMemory(id){
+  supaFetch('DELETE','rex_memory','id=eq.'+id,null,function(err){
+    if(!err){
+      _rexMemories = _rexMemories.filter(function(m){ return m.id !== id; });
+      // Re-render if on memory page
+      if(document.getElementById('sec-rexmemory')) rRexMemory();
+      console.log('Rex memory deleted:', id);
+    }
+  });
+}
+
+function rexCheckPersonalBriefItem(text, user){
+  // Detect "add X to my daily brief" / "always include X in my brief"
+  var m = text.match(/(?:add|always include|remind me about|put)\s+(.+?)\s+(?:to|in)\s+my\s+(?:daily\s+)?brief/i);
+  if(m){
+    var item = m[1].trim();
+    rexSaveMemory('personal', user, 'brief_item', item, false, user);
+    rexAddMessage('rex', 'Got it — I will always include **"'+item+'"** in your daily brief from now on.');
+    return true;
+  }
+  return false;
+}
+
+function rexExtractMemories(reply){
+  // Parse [REMEMBER: category|subject|key|value]
+  var re = /\[REMEMBER:\s*([^|\]]+)\|([^|\]]+)\|([^|\]]+)\|([^\]]+)\]/g;
+  var m;
+  while((m = re.exec(reply)) !== null){
+    var cat = m[1].trim(), subj = m[2].trim(), k = m[3].trim(), v = m[4].trim();
+    rexSaveMemory(cat, subj, k, v, false);
+  }
+  // Parse [REMEMBER_PRIVATE: key|value]
+  var re2 = /\[REMEMBER_PRIVATE:\s*([^|\]]+)\|([^\]]+)\]/g;
+  while((m = re2.exec(reply)) !== null){
+    var k2 = m[1].trim(), v2 = m[2].trim();
+    var currentUser = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser : 'Josh';
+    rexSaveMemory('personal', currentUser, k2, v2, true, currentUser);
+  }
+}
+
+// ── REX MEMORY PAGE ──────────────────────────────────────────────────────────
+
+function rRexMemory(){
+  var sec = document.getElementById('pg-rexmemory');
+  if(!sec) return;
+  var filterCat = sec._filterCat || 'all';
+  var cats = ['all','trust','candidate','pattern','desk','personal'];
+  var catCounts = {};
+  cats.forEach(function(c){ catCounts[c] = c === 'all' ? _rexMemories.length : _rexMemories.filter(function(m){ return m.category === c; }).length; });
+  var filtered = filterCat === 'all' ? _rexMemories : _rexMemories.filter(function(m){ return m.category === filterCat; });
+
+  var html = '<div style="padding:20px 24px;max-width:860px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
+    + '<div><span style="font-size:17px;font-weight:700;color:var(--tx)">Rex Memory</span>'
+    + '<span style="margin-left:10px;font-size:12px;color:var(--t3);background:var(--su2);padding:2px 8px;border-radius:10px">'+_rexMemories.length+' memories</span></div>'
+    + '<button onclick="rexLoadMemory(function(){rRexMemory();})" style="padding:5px 14px;border:0.5px solid var(--b2);border-radius:7px;background:var(--su);color:var(--t2);font-size:12px;cursor:pointer">Refresh</button>'
+    + '</div>';
+
+  // Filter pills
+  html += '<div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">';
+  cats.forEach(function(c){
+    var active = filterCat === c;
+    var bc = active ? '#1558a0' : 'var(--b2)';
+    var bg2 = active ? '#1558a0' : 'var(--su)';
+    var col = active ? '#fff' : 'var(--t2)';
+    var fw = active ? '600' : '400';
+    var label = c.charAt(0).toUpperCase()+c.slice(1)+(catCounts[c] ? ' ('+catCounts[c]+')' : '');
+    html += '<button data-rmcat="'+c+'" onclick="rexMemFilterClick(this)" style="padding:4px 12px;border-radius:20px;border:0.5px solid '+bc+';background:'+bg2+';color:'+col+';font-size:12px;cursor:pointer;font-weight:'+fw+'">'+label+'</button>';
+  });
+  html += '</div>';
+
+  if(!filtered.length){
+    html += '<div style="color:var(--t3);font-size:13px;padding:40px 0;text-align:center">'
+      + (filterCat === 'all' ? 'No memories yet. Rex will build these up as you chat.' : 'No '+filterCat+' memories yet.')
+      + '</div>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:8px">';
+    filtered.forEach(function(m){
+      var confDots = '';
+      for(var i=0;i<5;i++){
+        confDots += '<span style="width:6px;height:6px;border-radius:50%;background:'+(i < Math.min(m.confidence||1,5) ? '#1558a0' : 'var(--b2)')+';display:inline-block;margin-right:2px"></span>';
+      }
+      html += '<div style="background:var(--su);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+        + '<span style="font-size:10px;font-weight:600;background:var(--blbg);color:#1558a0;padding:2px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em">'+m.category+'</span>'
+        + '<span style="font-size:12px;font-weight:600;color:var(--tx)">'+m.subject+'</span>'
+        + (m.private ? '<span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:6px;font-weight:600">Private</span>' : '')
+        + '</div>'
+        + '<div style="font-size:13px;color:var(--t2)"><span style="color:var(--t3)">'+m.key+':</span> '+m.value+'</div>'
+        + '<div style="margin-top:6px;display:flex;align-items:center;gap:8px">'+confDots
+        + '<span style="font-size:10px;color:var(--t3)">confidence</span></div>'
+        + '</div>'
+        + '<button data-memid="'+m.id+'" onclick="rexMemDeleteClick(this)" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;flex-shrink:0" onmouseover="this.style.color=\'var(--rd)\'" onmouseout="this.style.color=\'var(--t3)\'">&times;</button>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  sec.innerHTML = html;
+}
+
+function rexMemFilterClick(btn){
+  var sec = document.getElementById('pg-rexmemory');
+  if(sec){ sec._filterCat = btn.getAttribute('data-rmcat'); rRexMemory(); }
+}
+function rexMemDeleteClick(btn){
+  var id = btn.getAttribute('data-memid');
+  if(id && confirm('Delete this memory?')) rexDeleteMemory(id);
+}
+
+// ── FUZZY CANDIDATE RESOLVER ────────────────────────────────────────────────
+function rexResolveCandidateName(name){
+  if(!name) return null;
+  // 1. Exact
+  var exact = C.find(function(c){ return c.n === name && c.ac !== 'Inactive'; });
+  if(exact) return exact.n;
+  // 2. Case insensitive
+  var lower = name.toLowerCase().trim();
+  var ci = C.find(function(c){ return c.n && c.n.toLowerCase().trim() === lower && c.ac !== 'Inactive'; });
+  if(ci) return ci.n;
+  // 3. First name match
+  var firstName = lower.split(' ')[0];
+  var matches = C.filter(function(c){ return c.n && c.n.toLowerCase().startsWith(firstName) && c.ac !== 'Inactive'; });
+  if(matches.length === 1) return matches[0].n;
+  if(matches.length > 1) return {ambiguous: true, matches: matches.map(function(c){ return c.n; })};
+  // 4. Fuzzy — any word in name matches
+  var words = lower.split(' ').filter(Boolean);
+  var fuzzy = C.filter(function(c){
+    if(!c.n || c.ac === 'Inactive') return false;
+    var cn = c.n.toLowerCase();
+    return words.some(function(w){ return cn.indexOf(w) >= 0 || _strDist(w, cn.split(' ').find(function(p){ return Math.abs(p.length-w.length)<=2; })||'') <= 1; });
+  });
+  if(fuzzy.length === 1) return fuzzy[0].n;
+  if(fuzzy.length > 1 && fuzzy.length <= 4) return {ambiguous: true, matches: fuzzy.map(function(c){ return c.n; })};
+  return null;
+}
+
+// ── SET SHIFT COUNT ─────────────────────────────────────────────────────────
+function rexExecuteSetShiftCount(action){
+  var f = action.fields || action;
+  var candName = f.candidate || f.candidate_name || '';
+  var dateStr = f.date || ''; // YYYY-MM-DD
+  var hospital = f.hospital || '';
+
+  if(!candName || !dateStr || !hospital){
+    rexAddMessage('rex', 'Missing details — need candidate, date and hospital to update shift count.');
+    return;
+  }
+
+  // Resolve candidate name with fuzzy matching
+  var resolved = rexResolveCandidateName(candName);
+  if(!resolved){
+    rexAddMessage('rex', 'I can\'t find **' + candName + '** in the active candidates list. Can you check the spelling?');
+    return;
+  }
+  if(resolved.ambiguous){
+    var opts = resolved.matches;
+    rexAddMessage('rex', 'I found a few candidates matching **' + candName + '** — did you mean:', opts.map(function(n){
+      return {label: n, primary: false, fn: (function(nm){ return function(){
+        action.fields.candidate = nm;
+        rexExecuteSetShiftCount(action);
+      }; })(n)};
+    }));
+    return;
+  }
+  candName = resolved;
+
+  // Work out week key (Monday of that week) and day index
+  var d = new Date(dateStr + 'T12:00:00');
+  var dow = (d.getDay() + 6) % 7; // 0=Mon, 6=Sun
+  var mon = new Date(d);
+  mon.setDate(d.getDate() - dow);
+  var wk = mon.getFullYear() + '-' + String(mon.getMonth()+1).padStart(2,'0') + '-' + String(mon.getDate()).padStart(2,'0');
+
+  // Find candidate index
+  var candIdx = getCandIdx(candName);
+  if(candIdx < 0){
+    rexAddMessage('rex', 'Matched **' + candName + '** but couldn\'t find them in the shift count grid. Please speak to Josh.');
+    return;
+  }
+
+  // Update sd
+  if(!sd[wk]) sd[wk] = {};
+  if(!sd[wk][candIdx]) sd[wk][candIdx] = {};
+  sd[wk][candIdx][dow] = hospital;
+
+  // Save to Supabase
+  saveShiftCountEntry(wk, candName, sd[wk][candIdx]);
+
+  // Re-render if on shift count page
+  if(typeof rTable === 'function') rTable();
+
+  var dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  rexAddMessage('rex', '**Done.** ' + candName + ' — **' + hospital + '** added for **' + dayNames[dow] + ' ' + dateStr + '** on the shift count.');
+  showToast('Shift count updated by Rex', 'success');
+}
+
+// ── REX LEARNING SYSTEM ──────────────────────────────────────────────────────
+
+function rexThumbsUp(btn){
+  btn.classList.add('active');
+  btn.style.opacity = '1';
+  btn.style.background = 'rgba(21,88,160,0.1)';
+  // Disable both thumbs
+  var parent = btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){ b.onclick = null; b.style.cursor = 'default'; });
+  // Save positive pattern memory silently
+  var msgText = btn.getAttribute('data-msgtext') || '';
+  if(msgText) rexSaveMemory('pattern', 'feedback', 'approved_response', msgText.slice(0,120), false);
+}
+
+function rexThumbsDown(btn){
+  btn.classList.add('active');
+  btn.style.opacity = '1';
+  btn.style.background = 'rgba(220,53,69,0.1)';
+  // Disable both thumbs
+  var parent = btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){ b.onclick = null; b.style.cursor = 'default'; });
+  var msgText = btn.getAttribute('data-msgtext') || '';
+  // Ask what went wrong — inject correction input
+  rexAddMessage('rex', "That wasn't right? Tell me what I should have done instead.");
+  _rexAwaitingCorrection = { originalResponse: msgText };
+}
+
+var _rexAwaitingCorrection = null;
+
+// Hook into rexSend to intercept corrections
+var _origRexSend = null;
+var _rexPendingAction = null; // holds action object while card is showing
+
+(function(){
+  var _realSend = window.rexSend;
+  window.rexSend = function(){
+    var inp = document.getElementById('rex-input');
+    if(!inp) return _realSend();
+    var text = inp.value.trim();
+
+    // Intercept correction flow
+    if(_rexAwaitingCorrection && text){
+      inp.value = '';
+      inp.style.height = '36px';
+      rexAddMessage('user', text);
+      var correction = _rexAwaitingCorrection;
+      _rexAwaitingCorrection = null;
+      rexProcessCorrection(correction.originalResponse, text);
+      return;
+    }
+
+    // Intercept manual brief requests
+    if(_briefTriggerPhrases && _briefTriggerPhrases.test(text)){
+      inp.value = '';
+      inp.style.height = '36px';
+      rexAddMessage('user', text);
+      rexTriggerManualBrief();
+      return;
+    }
+
+    // Intercept personal brief item additions
+    var _briefUser = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+    if(rexCheckPersonalBriefItem && rexCheckPersonalBriefItem(text, _briefUser)){
+      inp.value = '';
+      inp.style.height = '36px';
+      return;
+    }
+
+    // Intercept confirmation of pending action card
+    if(_rexPendingAction && text){
+      var confirmPhrases = /^(yes|yeah|yep|yup|do it|go ahead|confirm|ok|okay|sure|absolutely|add it|create it|save it|add that|do that|go for it)/i;
+      var cancelPhrases = /^(no|nope|cancel|stop|don't|dont|never mind|nevermind)/i;
+      if(confirmPhrases.test(text)){
+        inp.value = '';
+        inp.style.height = '36px';
+        rexAddMessage('user', text);
+        var act = _rexPendingAction;
+        _rexPendingAction = null;
+        // Remove the action card from UI
+        var card = document.getElementById('rex-action-card');
+        if(card) card.remove();
+        rexExecuteAction(act);
+        return;
+      }
+      if(cancelPhrases.test(text)){
+        inp.value = '';
+        inp.style.height = '36px';
+        rexAddMessage('user', text);
+        _rexPendingAction = null;
+        var card2 = document.getElementById('rex-action-card');
+        if(card2) card2.remove();
+        rexAddMessage('rex', 'Cancelled. Let me know if you want to try something else.');
+        return;
+      }
+    }
+
+    _realSend();
+  };
+})();
+
+function rexProcessCorrection(originalResponse, correction){
+  rexShowTyping();
+  // Ask Gemini to assess whether this can be learned directly
+  var prompt = 'A user corrected one of your responses. Assess whether this correction can be learned as a simple rule or requires code changes.\n\nOriginal response: ' + originalResponse + '\n\nCorrection: ' + correction + '\n\nRespond in this EXACT format with complete sentences, do not truncate:\nASSESSMENT: learnable\nRULE: Always do X when the user asks Y (write a complete, specific, actionable rule in under 20 words)\nEXPLANATION: One sentence why.\n\nOR:\nASSESSMENT: needs_code\nRULE: Description of code change needed\nEXPLANATION: One sentence why.';
+
+  fetch(_GEMINI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+    },
+    body: JSON.stringify({
+      contents: [{role:'user', parts:[{text: prompt}]}],
+      generationConfig: {temperature: 0.3, maxOutputTokens: 600}
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    rexHideTyping();
+    var reply = (data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts[0].text) || '';
+    var assessment = (reply.match(/ASSESSMENT:\s*(\S+)/) || [])[1] || '';
+    var rule = (reply.match(/RULE:\s*(.+)/) || [])[1] || correction;
+    var explanation = (reply.match(/EXPLANATION:\s*(.+)/) || [])[1] || '';
+
+    if(assessment === 'learnable'){
+      rexAddMessage('rex', 'Got it. I think I can learn this as a rule: **"' + rule + '"**\n\n' + explanation + '\n\nShould I remember this for next time?', [
+        {label: 'Yes, learn it', primary: true, fn: function(){
+          rexSaveMemory('rule', 'learned_rule', 'rule_' + Date.now(), rule, false);
+          rexAddMessage('rex', "Done — I've saved that as a rule. I'll follow it from now on.");
+        }},
+        {label: "No, don't save", fn: function(){
+          rexAddMessage('rex', 'Okay, I won\'t save it. Let me know if I get it wrong again.');
+        }}
+      ]);
+    } else {
+      // Needs code change — save to pending skills
+      var pendingSkill = {
+        description: 'User correction: ' + correction,
+        correction: 'Original: ' + originalResponse.slice(0,200) + ' | Should have: ' + correction,
+        status: 'pending'
+      };
+      supaFetch('POST', 'rex_pending_skills', '', pendingSkill, function(err){
+        if(!err) console.log('Rex pending skill saved');
+      });
+      rexAddMessage('rex', "I can't learn this one automatically — it needs a code change. **I've flagged it for Josh** and it will show up in Settings → Learned Skills as pending.\n\n" + explanation);
+    }
+  })
+  .catch(function(e){
+    rexHideTyping();
+    rexAddMessage('rex', 'Had trouble assessing that correction. Try again or flag it to Josh manually.');
+  });
+}
+
+// ── DESTRUCTIVE ACTION GUARD ─────────────────────────────────────────────────
+var _DESTRUCTIVE_TYPES = ['delete', 'remove', 'clear', 'bulk_update', 'bulk_delete'];
+var _origRexExecuteAction = window.rexExecuteAction;
+(function(){
+  var _realExecute = window.rexExecuteAction;
+  window.rexExecuteAction = function(action){
+    var type = (action.type || '').toLowerCase();
+    var isDestructive = _DESTRUCTIVE_TYPES.some(function(d){ return type.indexOf(d) >= 0; });
+    if(isDestructive){
+      rexAddMessage('rex', '\u26a0\ufe0f **Destructive action detected.** This will permanently delete or modify data. Are you absolutely sure?', [
+        {label: 'Yes, proceed', primary: false, fn: function(){ _realExecute(action); }},
+        {label: 'Cancel', primary: true, fn: function(){ rexAddMessage('rex', 'Cancelled. Nothing was changed.'); }}
+      ]);
+      return;
+    }
+    _realExecute(action);
+  };
+})();
+
+// ── LEARNED SKILLS SETTINGS PAGE ─────────────────────────────────────────────
+function rexRenderSkillsSettings(){
+  var el = document.getElementById('stab-content-skills');
+  if(!el) return;
+  if(!_rexMemoryLoaded){ rexLoadMemory(function(){ rexRenderSkillsSettings(); }); return; }
+  var rules = _rexMemories.filter(function(m){ return m.category === 'rule'; });
+  supaFetch('GET','rex_pending_skills','select=id,description,correction,status,created_at&order=created_at.desc',null,function(err,rows){
+    renderSkillsContent(el, rules, rows||[]);
+  });
+}
+
+function renderSkillsContent(el, rules, pending){
+  var h = '';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:10px">Learned Rules <span style="font-weight:400;color:var(--t3)">('+rules.length+')</span></div>';
+  if(!rules.length){
+    h += '<p style="font-size:12px;color:var(--t3)">No rules yet. Chat with Rex and use the thumbs down to teach it.</p>';
+  } else {
+    rules.forEach(function(r){
+      h += '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--su2);border:0.5px solid var(--b1);border-radius:8px;margin-bottom:6px">'
+        + '<div style="flex:1;font-size:12px;color:var(--tx);line-height:1.5">'+r.value+'</div>'
+        + '<button data-rid="'+r.id+'" onclick="rexDeleteRuleClick(this)" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;line-height:1;flex-shrink:0" onmouseover="this.style.color=\'var(--rd)\'" onmouseout="this.style.color=\'var(--t3)\'">&times;</button>'
+        + '</div>';
+    });
+  }
+  h += '<div style="font-size:12px;font-weight:700;color:var(--tx);margin:18px 0 10px">Pending Skills <span style="font-weight:400;color:var(--t3);font-size:11px">(needs code)</span></div>';
+  if(!pending.length){
+    h += '<p style="font-size:12px;color:var(--t3)">None pending.</p>';
+  } else {
+    pending.forEach(function(p){
+      var sc = p.status==='done'?'var(--grtx)':p.status==='in_progress'?'var(--amtx)':'var(--t3)';
+      h += '<div style="padding:9px 11px;background:var(--su2);border:0.5px solid var(--b1);border-radius:8px;margin-bottom:6px">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        + '<span style="font-size:10px;font-weight:700;color:'+sc+';text-transform:uppercase">'+p.status+'</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:var(--tx);margin-bottom:3px">'+p.description+'</div>'
+        + '<div style="font-size:11px;color:var(--t3)">'+p.correction+'</div>'
+        + '</div>';
+    });
+  }
+  h += '<div style="margin-top:20px;padding-top:14px;border-top:0.5px solid var(--b1)">'
+    + '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:6px">Add rule manually</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<input id="skill-manual-input" type="text" placeholder="e.g. Always use set_shift_count for shift count requests" style="flex:1;padding:7px 10px;border:0.5px solid var(--b2);border-radius:6px;background:var(--su);color:var(--tx);font-size:12px">'
+    + '<button onclick="rexAddManualRule()" style="padding:7px 14px;border:none;border-radius:6px;background:#1a2744;color:#fff;font-size:12px;cursor:pointer;font-weight:600">Add</button>'
+    + '</div></div>';
+  el.innerHTML = h;
+}
+
+function rexDeleteRuleClick(btn){
+  var id = btn.getAttribute('data-rid');
+  if(id && confirm('Delete this rule?')){ rexDeleteMemory(id); setTimeout(rexRenderSkillsSettings, 400); }
+}
+
+function rexAddManualRule(){
+  var inp = document.getElementById('skill-manual-input');
+  if(!inp || !inp.value.trim()) return;
+  rexSaveMemory('rule','manual_rule','rule_'+Date.now(), inp.value.trim(), false);
+  inp.value = '';
+  setTimeout(rexRenderSkillsSettings, 500);
+}
+
+// ── COMPLETE TASK ─────────────────────────────────────────────────────────────
+function rexExecuteCompleteTask(action){
+  var f = action.fields || action;
+  var searchNote = (f.note || f.task || '').toLowerCase().trim();
+  var searchConsultant = (f.assigned_to || f.consultant || '').toLowerCase().trim();
+
+  // Find matching task — fuzzy match on note text
+  var match = null;
+  var bestScore = 0;
+  _tasks.forEach(function(t){
+    if(t.done) return;
+    var tnote = (t.note || '').toLowerCase();
+    // Score based on word overlap
+    var searchWords = searchNote.split(' ').filter(Boolean);
+    var matches = searchWords.filter(function(w){ return tnote.indexOf(w) >= 0; }).length;
+    var score = matches / Math.max(searchWords.length, 1);
+    // Boost if consultant matches
+    if(searchConsultant && (t.consultant||'').toLowerCase().indexOf(searchConsultant) >= 0) score += 0.3;
+    if(score > bestScore && score >= 0.5){
+      bestScore = score;
+      match = t;
+    }
+  });
+
+  if(!match){
+    rexAddMessage('rex', 'I could not find a matching open task for: ' + (f.note || f.task || '?') + '. Can you be more specific or check the Tasks page?');
+    return;
+  }
+
+  // Mark done
+  match.done = true;
+  match.completedAt = new Date().toISOString();
+  saveTaskEntry(match, function(err){
+    if(err){
+      match.done = false;
+      rexAddMessage('rex', 'Failed to mark task as complete (**Error REX-006**). Please speak to Josh.');
+      return;
+    }
+    if(typeof rTodo === 'function') rTodo();
+    rexAddMessage('rex', '**Done.** Marked as complete: "' + match.note + '"' + (match.consultant ? ' (' + match.consultant + ')' : '') + '.');
+    showToast('Task completed by Rex', 'success');
+  });
+}
+
+// ── REX BRIEF SYSTEM ─────────────────────────────────────────────────────────
+
+function rexCheckBrief(){
+  var now = new Date();
+  var hour = now.getHours();
+  var today = now.toISOString().slice(0,10);
+  var currentUser = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+
+  // Reset brief flags on new day
+  if(_rexLastBriefDate !== today){
+    _rexBriefedMorning = false;
+    _rexBriefedAfternoon = false;
+    _rexLastBriefDate = today;
+    _rexMorningItems = [];
+  }
+
+  // Morning brief: before 12:00, not yet briefed
+  if(hour < 12 && !_rexBriefedMorning){
+    _rexBriefedMorning = true;
+    setTimeout(function(){ rexGenerateBrief('morning', currentUser); }, 800);
+    return;
+  }
+
+  // Afternoon brief: after 14:00, not yet briefed
+  if(hour >= 14 && !_rexBriefedAfternoon){
+    _rexBriefedAfternoon = true;
+    setTimeout(function(){ rexGenerateBrief('afternoon', currentUser); }, 800);
+    return;
+  }
+}
+
+function rexGenerateBrief(type, user){
+  rexShowTyping();
+
+  // Load this week's previous briefs for accountability
+  supaFetch('GET','rex_briefs',
+    'select=brief_type,content,flagged_items,created_at&user_name=eq.'+encodeURIComponent(user)+'&order=created_at.desc&limit=10',
+    null, function(err, prevBriefs){
+
+    var ctx = rexBuildContext();
+    var memCtx = rexMemoryContext();
+    var ruleCtx = _rexMemories.filter(function(m){return m.category==='rule';}).map(function(m){return '- '+m.value;}).join('\n');
+    var personalItems = _rexMemories.filter(function(m){
+      return m.category==='personal' && m.key==='brief_item' && (!m.owner || m.owner===user);
+    }).map(function(m){return '- '+m.value;}).join('\n');
+
+    // Build accountability context from week's briefs
+    var accountCtx = '';
+    if(prevBriefs && prevBriefs.length){
+      var unresolvedItems = [];
+      prevBriefs.forEach(function(b){
+        if(!b.flagged_items) return;
+        try {
+          var items = typeof b.flagged_items === 'string' ? JSON.parse(b.flagged_items) : b.flagged_items;
+          var briefDate = (b.created_at||'').slice(0,10);
+          var daysAgo = Math.floor((new Date() - new Date(briefDate)) / 86400000);
+          if(Array.isArray(items)){
+            items.forEach(function(item){
+              if(!item.resolved && daysAgo >= 1){
+                unresolvedItems.push({item: item.text, date: briefDate, daysAgo: daysAgo, briefType: b.brief_type});
+              }
+            });
+          }
+        } catch(e){}
+      });
+      if(unresolvedItems.length){
+        accountCtx = '\n\nUNRESOLVED ITEMS FROM THIS WEEK (hold '+user+' accountable for these):\n';
+        unresolvedItems.forEach(function(u){
+          accountCtx += '- ['+u.daysAgo+' day'+(u.daysAgo>1?'s':'')+' ago, '+u.briefType+' brief] '+u.item+'\n';
+        });
+      }
+    }
+
+    var isMorning = type === 'morning';
+    var prompt = 'You are Rex, giving '+user+' their '+(isMorning?'morning':'afternoon')+' brief.\n\n'
+      + (isMorning
+        ? 'Write a concise morning briefing covering: (1) the most urgent financial issues from div con, (2) any candidates with problems, (3) top priority tasks due today, (4) vacant shifts needing filling, (5) anything else critical. Start with "Morning '+user+'" — write like a sharp colleague, not a report. 2-3 sentences max per topic. Only mention things that actually need attention — do not pad with things that are fine.'
+        : 'Write an afternoon update covering: (1) what has been actioned today based on the morning brief, (2) what is still outstanding and urgency level, (3) anything new that emerged today, (4) what needs to happen before end of day. Start with "Afternoon '+user+'" — be direct about what is still unresolved.')
+      + '\n\nThis brief is for '+user+' specifically'+(user!=='Josh'?' — focus on their candidates and tasks, not admin/dev items':'')+'.'
+      + (personalItems ? '\n\n'+user+' has asked to always include in their brief:\n'+personalItems : '')
+      + (accountCtx ? accountCtx : '')
+      + '\n\nCurrent desk data:\n' + ctx
+      + (ruleCtx ? '\n\nRULES:\n'+ruleCtx : '')
+      + (memCtx ? '\n\nMemory:\n'+memCtx : '')
+      + '\n\nIMPORTANT: End your brief with a JSON block on the last line listing the flagged items so they can be tracked. Format exactly:\n[BRIEF_ITEMS: [{"text":"item description","resolved":false},{"text":"item 2","resolved":false}]]';
+
+    fetch(_GEMINI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+      },
+      body: JSON.stringify({
+        contents: [{role:'user', parts:[{text: prompt}]}],
+        generationConfig: {temperature: 0.4, maxOutputTokens: 1200}
+      })
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      rexHideTyping();
+      var reply = (data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts[0].text)||'';
+
+      // Extract flagged items
+      var flaggedItems = [];
+      var itemsMatch = reply.match(/\[BRIEF_ITEMS:\s*(\[[\s\S]*?\])\]/);
+      if(itemsMatch){
+        try{ flaggedItems = JSON.parse(itemsMatch[1]); }catch(e){}
+        reply = reply.replace(/\[BRIEF_ITEMS:[\s\S]*?\]/, '').trim();
+      }
+
+      // Store morning items for afternoon accountability
+      if(isMorning) _rexMorningItems = flaggedItems;
+
+      // Save brief to Supabase
+      supaFetch('POST','rex_briefs','', {
+        user_name: user,
+        brief_type: type,
+        content: reply,
+        flagged_items: JSON.stringify(flaggedItems)
+      }, function(){});
+
+      // Track in weekly items
+      var today2 = new Date().toISOString().slice(0,10);
+      if(!_rexWeekItems[today2]) _rexWeekItems[today2] = [];
+      flaggedItems.forEach(function(item){ _rexWeekItems[today2].push(item); });
+
+      rexAddMessage('rex', reply);
+    })
+    .catch(function(e){
+      rexHideTyping();
+      rexAddMessage('rex', 'I had trouble generating your brief. Ask me "what needs doing today?" and I will run through it manually.');
+    });
+  });
+}
+
+// Manual brief trigger — user says "brief me", "give me an update" etc
+function rexTriggerManualBrief(){
+  var user = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+  var hour = new Date().getHours();
+  var type = hour < 14 ? 'morning' : 'afternoon';
+  rexGenerateBrief(type, user);
+}
+
+// Detect manual brief requests in rexSend
+var _briefTriggerPhrases = /^(brief me|give me (an? )?(brief|update|summary)|what needs doing|morning brief|afternoon brief|how are we doing|where are we at|what's the situation|run me through|catch me up)/i;
+
+// ── REX AI AUDIT LOG ─────────────────────────────────────────────────────────
+function rexAuditLog(actionType, fields, approved, outcome){
+  var user = (_currentUser && _currentUser.name) ? _currentUser.name : 'unknown';
+  var entry = {
+    user_name: user,
+    action_type: actionType,
+    fields: JSON.stringify(fields || {}),
+    approved: approved !== false,
+    outcome: outcome || 'executed',
+    context_summary: 'Rex action via Atlas',
+    created_at: new Date().toISOString()
+  };
+  supaFetch('POST', 'rex_audit_log', '', entry, function(err){
+    if(err) console.warn('Rex audit log failed:', err.message || err);
+  });
+}
+
 </script>
 
 <!-- Rex AI Button -->
@@ -21328,7 +22614,7 @@ function rexExecuteUpdateLead(action){
   </div>
 
   <!-- Nudge strip (proactive alerts) -->
-  <div id="rex-nudges" style="display:none;flex-shrink:0;border-bottom:0.5px solid var(--b1);max-height:180px;overflow-y:auto"></div>
+  <div id="rex-nudges" style="display:none"></div>
 
   <!-- Chat messages -->
   <div id="rex-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:200px">
