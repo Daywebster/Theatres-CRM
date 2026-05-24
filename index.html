@@ -22464,7 +22464,40 @@ function rexGenerateBrief(type, user){
     'select=brief_type,content,flagged_items,created_at&user_name=eq.'+encodeURIComponent(user)+'&order=created_at.desc&limit=10',
     null, function(err, prevBriefs){
 
-    var ctx = rexBuildContext();
+    // Brief uses compact context — base + financial headline + tasks + cascade
+    var now2 = new Date();
+    var tod2 = now2.toISOString().slice(0,10);
+    var tom2 = new Date(now2); tom2.setDate(now2.getDate()+1);
+    var tomStr2 = tom2.toISOString().slice(0,10);
+    var myN2 = (_currentUser&&_currentUser.name)||'';
+    var ctx = rexBaseContext(myN2, tod2, tomStr2);
+    ctx += rexTaskContext(tod2, myN2);
+    ctx += rexCascadeContext(tod2, tomStr2);
+    // Financial headline only for brief
+    if(typeof _dcReports!=='undefined'&&_dcReports.length){
+      var dcS2=_dcReports.slice().sort(function(a,b){return(b.weekLabel||'').localeCompare(a.weekLabel||'');});
+      var dcL2=dcS2[0];
+      if(dcL2&&dcL2.rows){
+        var mg2=dcL2.rows.reduce(function(s,r){return s+(r.margin||0);},0);
+        var ch2=dcL2.rows.reduce(function(s,r){return s+(r.charge||0);},0);
+        var neg2=dcL2.rows.filter(function(r){return(r.margin||0)<0;});
+        var pnc2=dcL2.rows.filter(function(r){return(r.pay||0)>0&&(r.charge||0)===0;});
+        ctx+='DIV CON ('+dcL2.weekLabel+'): £'+Math.round(mg2).toLocaleString()+' margin ('+(ch2>0?Math.round((mg2/ch2)*100)+'%':'?')+')';
+        if(neg2.length)ctx+=' | '+neg2.length+' negative: '+neg2.slice(0,4).map(function(r){return(r.cand||'?').split(' ')[0]+' £'+Math.round(r.margin||0);}).join(', ');
+        if(pnc2.length)ctx+=' | '+pnc2.length+' paid-not-charged';
+        ctx+='\n\n';
+      }
+    }
+    // Candidate quiet alerts
+    if(typeof _rexCandPatterns!=='undefined'&&_rexCandPatterns){
+      var quiet2=[];
+      Object.keys(_rexCandPatterns).forEach(function(ri){
+        var p=_rexCandPatterns[ri];
+        var last2=p.weeklyData.slice(-2);
+        if(last2.reduce(function(s,w){return s+w.days;},0)===0&&p.avgDays>=2)quiet2.push(p.name);
+      });
+      if(quiet2.length)ctx+='QUIET CANDIDATES (usually work, not booked recently): '+quiet2.join(', ')+'\n\n';
+    }
     var memCtx = rexMemoryContext();
     var ruleCtx = _rexMemories.filter(function(m){return m.category==='rule';}).map(function(m){return '- '+m.value;}).join('\n');
     var personalItems = _rexMemories.filter(function(m){
