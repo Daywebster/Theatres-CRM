@@ -20609,6 +20609,7 @@ var _rexOpen = false;
 var _rexMessages = []; // {role, text, ts, actions}
 var _rexNudges = [];
 var _rexScanning = false;
+var _rexCandPatterns = null;
 var _rexApiKey = 'via-supabase'; // Key stored securely in Supabase Edge Function
 var _rexLastScan = 0;
 var _GEMINI_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co/functions/v1/smooth-api?action=gemini';
@@ -20902,6 +20903,110 @@ function rexScan(){
       } : null
     };
   }
+
+  // ── MODULE 2: Candidate Pattern Detection ───────────────────────────────────
+  try {
+    var _sdWeeks = Object.keys(sd).sort(); // all weeks in shift count, oldest first
+    var _recentWeeks = _sdWeeks.slice(-8); // last 8 weeks
+    var _thisWk = wKey(wkOff);
+    var _lastWk = _sdWeeks[_sdWeeks.indexOf(_thisWk) - 1] || '';
+
+    if(_recentWeeks.length >= 3){
+      // Build pattern per candidate: how many days booked per week over recent history
+      var _candPatterns = {}; // candIdx -> {avgDays, weeklyDays:[{wk, days, hospitals}], usualHospitals:{hosp:count}}
+
+      C.forEach(function(cand, ri){
+        if(!cand || !cand.n || cand.ac === 'Inactive') return;
+
+        var weeklyData = [];
+        var hospCounts = {};
+
+        _recentWeeks.forEach(function(wk){
+          var wkData = sd[wk] && sd[wk][ri] ? sd[wk][ri] : {};
+          var bookedDays = 0;
+          var hospitals = [];
+          Object.keys(wkData).forEach(function(di){
+            var val = wkData[di];
+            if(val && val !== 'A' && val !== 'U' && val !== 'T' && val !== ''){
+              bookedDays++;
+              hospitals.push(val);
+              hospCounts[val] = (hospCounts[val] || 0) + 1;
+            }
+          });
+          weeklyData.push({wk: wk, days: bookedDays, hospitals: hospitals});
+        });
+
+        var totalDays = weeklyData.reduce(function(s, w){ return s + w.days; }, 0);
+        var avgDays = totalDays / weeklyData.length;
+        var activeWeeks = weeklyData.filter(function(w){ return w.days > 0; }).length;
+
+        if(activeWeeks >= 3){ // only track candidates who regularly work
+          _candPatterns[ri] = {
+            name: cand.n,
+            spec: cand.s || '',
+            avgDays: avgDays,
+            activeWeeks: activeWeeks,
+            weeklyData: weeklyData,
+            usualHospitals: hospCounts
+          };
+        }
+      });
+
+      // Find candidates who usually work but have gone quiet (0 days last 1-2 weeks)
+      var _quietCands = [];
+      Object.keys(_candPatterns).forEach(function(ri){
+        var p = _candPatterns[ri];
+        if(p.avgDays < 1) return; // not a regular worker
+        
+        // Check last 2 weeks
+        var lastTwo = p.weeklyData.slice(-2);
+        var recentDays = lastTwo.reduce(function(s, w){ return s + w.days; }, 0);
+        var prevAvg = p.weeklyData.slice(0, -2).reduce(function(s, w){ return s + w.days; }, 0) / Math.max(p.weeklyData.length - 2, 1);
+        
+        if(recentDays === 0 && prevAvg >= 2){
+          var topHosp = Object.keys(p.usualHospitals).sort(function(a,b){
+            return p.usualHospitals[b] - p.usualHospitals[a];
+          }).slice(0, 2).join(', ');
+          _quietCands.push({
+            name: p.name,
+            spec: p.spec,
+            avgDays: Math.round(prevAvg * 10) / 10,
+            topHospitals: topHosp,
+            weeksQuiet: lastTwo.filter(function(w){ return w.days === 0; }).length
+          });
+        }
+      });
+
+      if(_quietCands.length){
+        _rexNudges.push({
+          priority: 2,
+          icon: '&#128683;',
+          col: '#d97706',
+          bg: '#fffbeb',
+          title: _quietCands.length + ' regular candidate'+ (_quietCands.length > 1 ? 's' : '') + ' not booked recently',
+          body: _quietCands.slice(0, 4).map(function(c){
+            return c.name + ' (' + c.spec + ') — usually ' + c.avgDays + ' days/wk @ ' + (c.topHospitals || 'various') + ', quiet for ' + c.weeksQuiet + ' wk' + (c.weeksQuiet > 1 ? 's' : '');
+          }).join(' · '),
+          action: {label: 'View Shift Count', fn: 'gp("shifts")'}
+        });
+      }
+
+      // Find candidates working significantly MORE than usual (spike)
+      var _spikeCands = [];
+      Object.keys(_candPatterns).forEach(function(ri){
+        var p = _candPatterns[ri];
+        var thisWkData = p.weeklyData[p.weeklyData.length - 1];
+        if(!thisWkData) return;
+        var prevAvg = p.weeklyData.slice(0, -1).reduce(function(s, w){ return s + w.days; }, 0) / Math.max(p.weeklyData.length - 1, 1);
+        if(thisWkData.days >= 5 && prevAvg < 3){
+          _spikeCands.push({name: p.name, spec: p.spec, days: thisWkData.days, avg: Math.round(prevAvg * 10) / 10});
+        }
+      });
+
+      // Add candidate patterns to context
+      _rexCandPatterns = _candPatterns;
+    }
+  } catch(e){ console.warn('Rex Module 2 error:', e); }
 
   // ── 6. Candidates available today but not booked on matching vacancy ──────
   var todayDow = now.getDay();
@@ -21255,16 +21360,70 @@ function rexBuildContext(){
       }
       ctx += '\n';
     }
-    // Historical trend (last 8 weeks)
+    // Historical trend — all weeks summary + full anomaly cross-reference
     if(_dcSorted.length > 1){
-      ctx += 'DIV CON TREND (last '+Math.min(_dcSorted.length,8)+' weeks):\n';
-      _dcSorted.slice(0,8).forEach(function(rep){
-        var mg=((rep.rows||[])).reduce(function(s,r){return s+(r.margin||0);},0);
-        var ch=((rep.rows||[])).reduce(function(s,r){return s+(r.charge||0);},0);
+      ctx += 'DIV CON ALL WEEKS SUMMARY ('+_dcSorted.length+' weeks on record):\n';
+      _dcSorted.forEach(function(rep){
+        var rows = rep.rows||[];
+        var mg=rows.reduce(function(s,r){return s+(r.margin||0);},0);
+        var ch=rows.reduce(function(s,r){return s+(r.charge||0);},0);
+        var py=rows.reduce(function(s,r){return s+(r.pay||0);},0);
+        var hrs=rows.reduce(function(s,r){return s+(r.hrs||0);},0);
         var pct=ch>0?Math.round((mg/ch)*100):0;
-        ctx += '- '+rep.weekLabel+': £'+Math.round(mg).toLocaleString()+' margin ('+pct+'%) | '+((rep.rows||[]).length)+' rows\n';
+        var neg=rows.filter(function(r){return (r.margin||0)<0;}).length;
+        var pnc=rows.filter(function(r){return (r.pay||0)>0&&(r.charge||0)===0;}).length;
+        ctx += rep.weekLabel+': £'+Math.round(mg).toLocaleString()+' margin ('+pct+'%) | charge £'+Math.round(ch).toLocaleString()+' | pay £'+Math.round(py).toLocaleString()+' | '+Math.round(hrs)+'h | '+rows.length+' rows'+(neg?' | '+neg+' neg':'')+( pnc?' | '+pnc+' paid-not-charged':'')+'\n';
       });
       ctx += '\n';
+
+      // Cross-reference: candidates with negative margin across ANY week
+      var negByCand = {};
+      _dcSorted.forEach(function(rep){
+        (rep.rows||[]).forEach(function(r){
+          if((r.margin||0) < 0){
+            var k = r.cand||'?';
+            if(!negByCand[k]) negByCand[k] = [];
+            negByCand[k].push({week:rep.weekLabel, client:r.client||'?', date:r.date||'?', margin:r.margin||0, pay:r.pay||0, charge:r.charge||0, hrs:r.hrs||0});
+          }
+        });
+      });
+      var negCands = Object.keys(negByCand);
+      if(negCands.length){
+        ctx += 'CANDIDATES WITH NEGATIVE MARGIN (ANY WEEK):\n';
+        negCands.forEach(function(cand){
+          var entries = negByCand[cand];
+          ctx += cand+' ('+entries.length+' occurrence'+(entries.length>1?'s':'')+'):\n';
+          entries.forEach(function(e){
+            ctx += '  '+e.week+' | '+e.client+' | '+e.date+' | margin £'+Math.round(e.margin)+' | pay £'+Math.round(e.pay)+' | charge £'+Math.round(e.charge)+' | '+e.hrs+'h\n';
+          });
+        });
+        ctx += '\n';
+      }
+
+      // Cross-reference: paid but not charged across ANY week
+      var pncByCand = {};
+      _dcSorted.forEach(function(rep){
+        (rep.rows||[]).forEach(function(r){
+          if((r.pay||0)>0 && (r.charge||0)===0){
+            var k = r.cand||'?';
+            if(!pncByCand[k]) pncByCand[k] = [];
+            pncByCand[k].push({week:rep.weekLabel, client:r.client||'?', date:r.date||'?', pay:r.pay||0, hrs:r.hrs||0});
+          }
+        });
+      });
+      var pncCands = Object.keys(pncByCand);
+      if(pncCands.length){
+        ctx += 'CANDIDATES PAID BUT NOT CHARGED (ANY WEEK):\n';
+        pncCands.forEach(function(cand){
+          var entries = pncByCand[cand];
+          var totalPay = entries.reduce(function(s,e){return s+e.pay;},0);
+          ctx += cand+' — '+entries.length+' row'+(entries.length>1?'s':'')+', total unpaid charge: £'+Math.round(totalPay).toLocaleString()+'\n';
+          entries.forEach(function(e){
+            ctx += '  '+e.week+' | '+e.client+' | '+e.date+' | pay £'+Math.round(e.pay)+'\n';
+          });
+        });
+        ctx += '\n';
+      }
     }
   }
 
@@ -21312,6 +21471,27 @@ function rexBuildContext(){
       });
     }
     ctx+='\n';
+  }
+
+  // Candidate patterns context
+  if(typeof _rexCandPatterns !== 'undefined' && _rexCandPatterns){
+    var _cpKeys = Object.keys(_rexCandPatterns);
+    if(_cpKeys.length){
+      ctx += 'CANDIDATE WORKING PATTERNS (last 8 weeks):\n';
+      _cpKeys.forEach(function(ri){
+        var p = _rexCandPatterns[ri];
+        var topHosps = Object.keys(p.usualHospitals).sort(function(a,b){
+          return p.usualHospitals[b] - p.usualHospitals[a];
+        }).slice(0,3).map(function(h){
+          return h + '(' + p.usualHospitals[h] + 'd)';
+        }).join(', ');
+        var recent = p.weeklyData.slice(-3).map(function(w){
+          return w.wk.slice(5) + ':' + (w.days > 0 ? w.days + 'd' : '-');
+        }).join(' ');
+        ctx += p.name + ' (' + p.spec + '): avg ' + Math.round(p.avgDays * 10) / 10 + ' days/wk | usual: ' + (topHosps || 'various') + ' | recent: ' + recent + '\n';
+      });
+      ctx += '\n';
+    }
   }
 
   // Available candidates — fuller list
