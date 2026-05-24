@@ -22501,8 +22501,8 @@ function rexGenerateBrief(type, user){
     var isMorning = type === 'morning';
     var prompt = 'You are Rex, giving '+user+' their '+(isMorning?'morning':'afternoon')+' brief.\n\n'
       + (isMorning
-        ? 'Write a concise morning briefing covering: (1) the most urgent financial issues from div con, (2) any candidates with problems, (3) top priority tasks due today, (4) vacant shifts needing filling, (5) anything else critical. Start with "Morning '+user+'" — write like a sharp colleague, not a report. 2-3 sentences max per topic. Only mention things that actually need attention — do not pad with things that are fine.'
-        : 'Write an afternoon update covering: (1) what has been actioned today based on the morning brief, (2) what is still outstanding and urgency level, (3) anything new that emerged today, (4) what needs to happen before end of day. Start with "Afternoon '+user+'" — be direct about what is still unresolved.')
+        ? 'Morning brief for '+user+'. Write like a sharp colleague — short sentences, only things that need action. Cover: financial anomalies, candidates to chase, tasks due today, vacant shifts. Skip anything fine. Start: Morning '+user+','
+        : 'Afternoon update for '+user+'. Cover: what got done today, what is still outstanding, what must happen before EOD. Be direct. Start: Afternoon '+user+',')
       + '\n\nThis brief is for '+user+' specifically'+(user!=='Josh'?' — focus on their candidates and tasks, not admin/dev items':'')+'.'
       + (personalItems ? '\n\n'+user+' has asked to always include in their brief:\n'+personalItems : '')
       + (accountCtx ? accountCtx : '')
@@ -22694,7 +22694,7 @@ function rexFinancialContext() {
   var pncCands=Object.keys(pncByCand);
   if(pncCands.length){
     ctx+='PAID NOT CHARGED BY CANDIDATE (ALL WEEKS):\n';
-    pncCands.forEach(function(c){var e=pncByCand[c];var tot=e.reduce(function(s,x){return s+x.pay;},0);ctx+=c+': '+e.length+' rows, £'+Math.round(tot).toLocaleString()+'\n';});
+    pncCands.forEach(function(c){var e=pncByCand[c];var tot=e.reduce(function(s,x){return s+x.pay;},0);ctx+=c+': '+e.length+' rows, £'+Math.round(tot).toLocaleString()+' | dates: '+e.map(function(x){return x.date+' ('+x.week+') £'+Math.round(x.pay);}).join(', ')+'\n';});
     ctx+='\n';
   }
 
