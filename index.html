@@ -21581,7 +21581,7 @@ function rexCallGemini(userMessage){
     + "Example for task: Adding that now. [ACTION: {\"type\": \"create_task\", \"fields\": {\"note\": \"do a CV for John\", \"due_date\": \"2026-05-23\", \"assigned_to\": \"Rachel\"}}]\n"
     + "Example for shift count: On it. [ACTION: {\"type\": \"set_shift_count\", \"fields\": {\"candidate\": \"Roseline Emmanuel\", \"date\": \"2026-05-23\", \"hospital\": \"Ramsay Oaks\"}}]\n"
     + "Example for shift: Adding shift. [ACTION: {\"type\": \"add_shift\", \"fields\": {\"hospital\": \"East Surrey\", \"role\": \"Scrub\", \"date\": \"2026-05-23\", \"time_start\": \"08:00\", \"time_end\": \"18:00\", \"rate\": 350}}]\n\n"
-    + "Action types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital)\n\n"
+    + "Action types: add_shift, create_task (fields: note, due_date, assigned_to), update_lead (fields: id, status, notes), set_shift_count (fields: candidate, date YYYY-MM-DD, hospital), complete_task (fields: note — description of task to mark done, assigned_to — optional consultant name)\n\n"
     + "For shift count requests: use set_shift_count. Only need candidate full name, date, hospital. Do NOT ask for role/times/rate.\n\n"
     + "If missing a required field, ask for it — one question at a time. Never guess rates, times or roles.\n\n"
     + "Memory: append memory tags when you learn something useful:\n"
@@ -21712,7 +21712,8 @@ function rexShowApprovalCard(action){
     'create_task': 'Create Task',
     'update_lead': 'Update NHS Lead',
     'mark_available': 'Mark Candidate Available',
-    'set_shift_count': 'Add to Shift Count'
+    'set_shift_count': 'Add to Shift Count',
+    'complete_task': 'Mark Task Complete'
   }[action.type] || action.type;
 
   var detailsHtml = '<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">'+typeLabel+'</div>';
@@ -21769,6 +21770,8 @@ function rexExecuteAction(action){
     rexExecuteUpdateLead(action);
   } else if(type === 'set_shift_count'){
     rexExecuteSetShiftCount(action);
+  } else if(type === 'complete_task'){
+    rexExecuteCompleteTask(action);
   } else {
     rexAddMessage('rex', 'I don\'t know how to execute that action yet. Please speak to Josh to sort this.');
   }
@@ -22350,6 +22353,50 @@ function rexAddManualRule(){
   rexSaveMemory('rule','manual_rule','rule_'+Date.now(), inp.value.trim(), false);
   inp.value = '';
   setTimeout(rexRenderSkillsSettings, 500);
+}
+
+// ── COMPLETE TASK ─────────────────────────────────────────────────────────────
+function rexExecuteCompleteTask(action){
+  var f = action.fields || action;
+  var searchNote = (f.note || f.task || '').toLowerCase().trim();
+  var searchConsultant = (f.assigned_to || f.consultant || '').toLowerCase().trim();
+
+  // Find matching task — fuzzy match on note text
+  var match = null;
+  var bestScore = 0;
+  _tasks.forEach(function(t){
+    if(t.done) return;
+    var tnote = (t.note || '').toLowerCase();
+    // Score based on word overlap
+    var searchWords = searchNote.split(' ').filter(Boolean);
+    var matches = searchWords.filter(function(w){ return tnote.indexOf(w) >= 0; }).length;
+    var score = matches / Math.max(searchWords.length, 1);
+    // Boost if consultant matches
+    if(searchConsultant && (t.consultant||'').toLowerCase().indexOf(searchConsultant) >= 0) score += 0.3;
+    if(score > bestScore && score >= 0.5){
+      bestScore = score;
+      match = t;
+    }
+  });
+
+  if(!match){
+    rexAddMessage('rex', 'I could not find a matching open task for: ' + (f.note || f.task || '?') + '. Can you be more specific or check the Tasks page?');
+    return;
+  }
+
+  // Mark done
+  match.done = true;
+  match.completedAt = new Date().toISOString();
+  saveTaskEntry(match, function(err){
+    if(err){
+      match.done = false;
+      rexAddMessage('rex', 'Failed to mark task as complete (**Error REX-006**). Please speak to Josh.');
+      return;
+    }
+    if(typeof rTodo === 'function') rTodo();
+    rexAddMessage('rex', '**Done.** Marked as complete: "' + match.note + '"' + (match.consultant ? ' (' + match.consultant + ')' : '') + '.');
+    showToast('Task completed by Rex', 'success');
+  });
 }
 
 </script>
