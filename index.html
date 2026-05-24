@@ -21555,6 +21555,7 @@ function rexCallGemini(userMessage){
 
   var systemPrompt = "You are Rex, an operations assistant built into Atlas, the internal CRM for Day Webster Group, a UK healthcare staffing agency placing theatre staff (scrub nurses, ODPs, anaesthetic practitioners, recovery nurses, surgical first assistants) across NHS trusts and independent hospitals.\n\n"
     + "Personality: Direct, sharp, brief. Talk like a smart colleague who knows the business. No filler. Get to the point.\n\n"
+    + "SYNTHESIS: When asked about risks, priorities, concerns or what to focus on — synthesise from ALL available data. Never say you cannot track something if the data exists. If asked for the biggest risk, look at negative margins, paid-not-charged, vacant shifts, overdue tasks, quiet candidates and give a direct answer with evidence.\n\n"
     + "HONESTY — absolute rule: You cannot lie. Not even to be polite. Not even a small one.\n"
     + "- Never say you saved, confirmed, added or completed something unless you actually appended an [ACTION:...] block or [REMEMBER:...] tag that executed it.\n"
     + "- If you failed or are unsure, say so directly. No: I saved it. Yes: I did not save that — I need to use a [REMEMBER:] tag to store it.\n"
@@ -22657,8 +22658,8 @@ function rexFinancialContext() {
 
     ctx += 'DIV CON — LATEST ('+latest.weekLabel+'):\n';
     ctx += '- Margin: £'+Math.round(mg).toLocaleString()+' ('+(ch>0?Math.round((mg/ch)*100)+'%':'N/A')+') | Charge: £'+Math.round(ch).toLocaleString()+' | Pay: £'+Math.round(py).toLocaleString()+' | '+Math.round(hrs)+'h | '+rows.length+' rows\n';
-    if(neg.length) ctx += '- NEGATIVE MARGIN ('+neg.length+'): '+neg.map(function(r){return(r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' £'+Math.round(r.margin||0)+'(pay£'+Math.round(r.pay||0)+',chg£'+Math.round(r.charge||0)+')';}).join(' | ')+'\n';
-    if(pnc.length) ctx += '- PAID NOT CHARGED ('+pnc.length+'): '+pnc.map(function(r){return(r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' pay£'+Math.round(r.pay||0);}).join(' | ')+'\n';
+    if(neg.length) ctx += '- NEGATIVE MARGIN ('+neg.length+'): '+neg.slice(0,8).map(function(r){return(r.cand||'?').split(' ')[0]+' '+r.date+' £'+Math.round(r.margin||0);}).join(', ')+(neg.length>8?' +more':'')+'\n';
+    if(pnc.length) ctx += '- PAID NOT CHARGED ('+pnc.length+'): '+pnc.slice(0,5).map(function(r){return(r.cand||'?').split(' ')[0]+' £'+Math.round(r.pay||0);}).join(', ')+(pnc.length>5?' +more':'')+'\n';
     if(low.length) ctx += '- LOW MARGIN <10% ('+low.length+'): '+low.slice(0,5).map(function(r){var p=r.charge>0?Math.round((r.margin/r.charge)*100):0;return(r.cand||'?')+' '+p+'%';}).join(' | ')+'\n';
     if(prev&&prev.rows){var pm=prev.rows.reduce(function(s,r){return s+(r.margin||0);},0);ctx+='- vs '+prev.weekLabel+': £'+Math.round(pm).toLocaleString()+' → £'+Math.round(mg).toLocaleString()+' ('+(mg>=pm?'+':'')+Math.round(mg-pm).toLocaleString()+')\n';}
     ctx += '\n';
@@ -22687,13 +22688,13 @@ function rexFinancialContext() {
   var negCands=Object.keys(negByCand);
   if(negCands.length){
     ctx+='NEGATIVE MARGIN BY CANDIDATE (ALL WEEKS):\n';
-    negCands.forEach(function(c){var e=negByCand[c];ctx+=c+' ('+e.length+'x): '+e.map(function(x){return x.week+' '+x.client+' £'+Math.round(x.margin);}).join(' | ')+'\n';});
+    negCands.forEach(function(c){var e=negByCand[c];var tot=e.reduce(function(s,x){return s+x.margin;},0);ctx+=c+': '+e.length+'x, total £'+Math.round(tot)+' ('+e.map(function(x){return x.week.replace('26-27','').replace('25-26','');}).join(',')+')'+'\n';});
     ctx+='\n';
   }
   var pncCands=Object.keys(pncByCand);
   if(pncCands.length){
     ctx+='PAID NOT CHARGED BY CANDIDATE (ALL WEEKS):\n';
-    pncCands.forEach(function(c){var e=pncByCand[c];var tot=e.reduce(function(s,x){return s+x.pay;},0);ctx+=c+' — '+e.length+' rows, £'+Math.round(tot).toLocaleString()+' total: '+e.map(function(x){return x.week+' '+x.client+' £'+Math.round(x.pay);}).join(' | ')+'\n';});
+    pncCands.forEach(function(c){var e=pncByCand[c];var tot=e.reduce(function(s,x){return s+x.pay;},0);ctx+=c+': '+e.length+' rows, £'+Math.round(tot).toLocaleString()+'\n';});
     ctx+='\n';
   }
 
