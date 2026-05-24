@@ -20612,6 +20612,11 @@ var _rexScanning = false;
 var _rexCandPatterns = null;
 var _rexApiKey = 'via-supabase'; // Key stored securely in Supabase Edge Function
 var _rexLastScan = 0;
+var _rexBriefedMorning = false;
+var _rexBriefedAfternoon = false;
+var _rexLastBriefDate = '';
+var _rexMorningItems = [];
+var _rexWeekItems = {};
 var _GEMINI_URL = 'https://gyriltyhwrvucalkbmsi.supabase.co/functions/v1/smooth-api?action=gemini';
 
 // ── Toggle panel ────────────────────────────────────────────────────────────
@@ -20622,7 +20627,7 @@ function rexToggle(){
   if(_rexOpen){
     rexScan();
     rexLoadMemory();
-    // Auto-brief disabled - user can ask "What needs doing today?" manually
+    rexCheckBrief();
     setTimeout(function(){
       var inp = document.getElementById('rex-input');
       if(inp)inp.focus();
@@ -21054,8 +21059,8 @@ function rexScan(){
   var sl = document.getElementById('rex-status-line');
   if(sl){
     sl.textContent = _rexNudges.length
-      ? _rexNudges.length+' thing'+ (_rexNudges.length>1?'s':'')+' need attention'
-      : 'All clear \u2713';
+      ? _rexNudges.length+' alert'+ (_rexNudges.length>1?'s':'')+' — ask Rex for details'
+      : 'All clear ✓';
   }
 
   _rexScanning = false;
@@ -21963,6 +21968,18 @@ function rexDeleteMemory(id){
   });
 }
 
+function rexCheckPersonalBriefItem(text, user){
+  // Detect "add X to my daily brief" / "always include X in my brief"
+  var m = text.match(/(?:add|always include|remind me about|put)\s+(.+?)\s+(?:to|in)\s+my\s+(?:daily\s+)?brief/i);
+  if(m){
+    var item = m[1].trim();
+    rexSaveMemory('personal', user, 'brief_item', item, false, user);
+    rexAddMessage('rex', 'Got it — I will always include **"'+item+'"** in your daily brief from now on.');
+    return true;
+  }
+  return false;
+}
+
 function rexExtractMemories(reply){
   // Parse [REMEMBER: category|subject|key|value]
   var re = /\[REMEMBER:\s*([^|\]]+)\|([^|\]]+)\|([^|\]]+)\|([^\]]+)\]/g;
@@ -22189,6 +22206,23 @@ var _rexPendingAction = null; // holds action object while card is showing
       return;
     }
 
+    // Intercept manual brief requests
+    if(_briefTriggerPhrases && _briefTriggerPhrases.test(text)){
+      inp.value = '';
+      inp.style.height = '36px';
+      rexAddMessage('user', text);
+      rexTriggerManualBrief();
+      return;
+    }
+
+    // Intercept personal brief item additions
+    var _briefUser = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+    if(rexCheckPersonalBriefItem && rexCheckPersonalBriefItem(text, _briefUser)){
+      inp.value = '';
+      inp.style.height = '36px';
+      return;
+    }
+
     // Intercept confirmation of pending action card
     if(_rexPendingAction && text){
       var confirmPhrases = /^(yes|yeah|yep|yup|do it|go ahead|confirm|ok|okay|sure|absolutely|add it|create it|save it|add that|do that|go for it)/i;
@@ -22399,6 +22433,153 @@ function rexExecuteCompleteTask(action){
   });
 }
 
+// ── REX BRIEF SYSTEM ─────────────────────────────────────────────────────────
+
+function rexCheckBrief(){
+  var now = new Date();
+  var hour = now.getHours();
+  var today = now.toISOString().slice(0,10);
+  var currentUser = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+
+  // Reset brief flags on new day
+  if(_rexLastBriefDate !== today){
+    _rexBriefedMorning = false;
+    _rexBriefedAfternoon = false;
+    _rexLastBriefDate = today;
+    _rexMorningItems = [];
+  }
+
+  // Morning brief: before 12:00, not yet briefed
+  if(hour < 12 && !_rexBriefedMorning){
+    _rexBriefedMorning = true;
+    setTimeout(function(){ rexGenerateBrief('morning', currentUser); }, 800);
+    return;
+  }
+
+  // Afternoon brief: after 14:00, not yet briefed
+  if(hour >= 14 && !_rexBriefedAfternoon){
+    _rexBriefedAfternoon = true;
+    setTimeout(function(){ rexGenerateBrief('afternoon', currentUser); }, 800);
+    return;
+  }
+}
+
+function rexGenerateBrief(type, user){
+  rexShowTyping();
+
+  // Load this week's previous briefs for accountability
+  supaFetch('GET','rex_briefs',
+    'select=brief_type,content,flagged_items,created_at&user_name=eq.'+encodeURIComponent(user)+'&order=created_at.desc&limit=10',
+    null, function(err, prevBriefs){
+
+    var ctx = rexBuildContext();
+    var memCtx = rexMemoryContext();
+    var ruleCtx = _rexMemories.filter(function(m){return m.category==='rule';}).map(function(m){return '- '+m.value;}).join('\n');
+    var personalItems = _rexMemories.filter(function(m){
+      return m.category==='personal' && m.key==='brief_item' && (!m.owner || m.owner===user);
+    }).map(function(m){return '- '+m.value;}).join('\n');
+
+    // Build accountability context from week's briefs
+    var accountCtx = '';
+    if(prevBriefs && prevBriefs.length){
+      var unresolvedItems = [];
+      prevBriefs.forEach(function(b){
+        if(!b.flagged_items) return;
+        try {
+          var items = typeof b.flagged_items === 'string' ? JSON.parse(b.flagged_items) : b.flagged_items;
+          var briefDate = (b.created_at||'').slice(0,10);
+          var daysAgo = Math.floor((new Date() - new Date(briefDate)) / 86400000);
+          if(Array.isArray(items)){
+            items.forEach(function(item){
+              if(!item.resolved && daysAgo >= 1){
+                unresolvedItems.push({item: item.text, date: briefDate, daysAgo: daysAgo, briefType: b.brief_type});
+              }
+            });
+          }
+        } catch(e){}
+      });
+      if(unresolvedItems.length){
+        accountCtx = '\n\nUNRESOLVED ITEMS FROM THIS WEEK (hold '+user+' accountable for these):\n';
+        unresolvedItems.forEach(function(u){
+          accountCtx += '- ['+u.daysAgo+' day'+(u.daysAgo>1?'s':'')+' ago, '+u.briefType+' brief] '+u.item+'\n';
+        });
+      }
+    }
+
+    var isMorning = type === 'morning';
+    var prompt = 'You are Rex, giving '+user+' their '+(isMorning?'morning':'afternoon')+' brief.\n\n'
+      + (isMorning
+        ? 'Write a concise morning briefing covering: (1) the most urgent financial issues from div con, (2) any candidates with problems, (3) top priority tasks due today, (4) vacant shifts needing filling, (5) anything else critical. Start with "Morning '+user+'" — write like a sharp colleague, not a report. 2-3 sentences max per topic. Only mention things that actually need attention — do not pad with things that are fine.'
+        : 'Write an afternoon update covering: (1) what has been actioned today based on the morning brief, (2) what is still outstanding and urgency level, (3) anything new that emerged today, (4) what needs to happen before end of day. Start with "Afternoon '+user+'" — be direct about what is still unresolved.')
+      + '\n\nThis brief is for '+user+' specifically'+(user!=='Josh'?' — focus on their candidates and tasks, not admin/dev items':'')+'.'
+      + (personalItems ? '\n\n'+user+' has asked to always include in their brief:\n'+personalItems : '')
+      + (accountCtx ? accountCtx : '')
+      + '\n\nCurrent desk data:\n' + ctx
+      + (ruleCtx ? '\n\nRULES:\n'+ruleCtx : '')
+      + (memCtx ? '\n\nMemory:\n'+memCtx : '')
+      + '\n\nIMPORTANT: End your brief with a JSON block on the last line listing the flagged items so they can be tracked. Format exactly:\n[BRIEF_ITEMS: [{"text":"item description","resolved":false},{"text":"item 2","resolved":false}]]';
+
+    fetch(_GEMINI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cmlsdHlod3J2dWNhbGtibXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTQzNzEsImV4cCI6MjA5MTg5MDM3MX0.vGcPKKm3-onDbtKhTxXOml4wdrpvi6C6bcoojf-Pc14'
+      },
+      body: JSON.stringify({
+        contents: [{role:'user', parts:[{text: prompt}]}],
+        generationConfig: {temperature: 0.4, maxOutputTokens: 800}
+      })
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      rexHideTyping();
+      var reply = (data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts[0].text)||'';
+
+      // Extract flagged items
+      var flaggedItems = [];
+      var itemsMatch = reply.match(/\[BRIEF_ITEMS:\s*(\[[\s\S]*?\])\]/);
+      if(itemsMatch){
+        try{ flaggedItems = JSON.parse(itemsMatch[1]); }catch(e){}
+        reply = reply.replace(/\[BRIEF_ITEMS:[\s\S]*?\]/, '').trim();
+      }
+
+      // Store morning items for afternoon accountability
+      if(isMorning) _rexMorningItems = flaggedItems;
+
+      // Save brief to Supabase
+      supaFetch('POST','rex_briefs','', {
+        user_name: user,
+        brief_type: type,
+        content: reply,
+        flagged_items: JSON.stringify(flaggedItems)
+      }, function(){});
+
+      // Track in weekly items
+      var today2 = new Date().toISOString().slice(0,10);
+      if(!_rexWeekItems[today2]) _rexWeekItems[today2] = [];
+      flaggedItems.forEach(function(item){ _rexWeekItems[today2].push(item); });
+
+      rexAddMessage('rex', reply);
+    })
+    .catch(function(e){
+      rexHideTyping();
+      rexAddMessage('rex', 'I had trouble generating your brief. Ask me "what needs doing today?" and I will run through it manually.');
+    });
+  });
+}
+
+// Manual brief trigger — user says "brief me", "give me an update" etc
+function rexTriggerManualBrief(){
+  var user = (_currentUser && _currentUser.name) ? _currentUser.name : 'Josh';
+  var hour = new Date().getHours();
+  var type = hour < 14 ? 'morning' : 'afternoon';
+  rexGenerateBrief(type, user);
+}
+
+// Detect manual brief requests in rexSend
+var _briefTriggerPhrases = /^(brief me|give me (an? )?(brief|update|summary)|what needs doing|morning brief|afternoon brief|how are we doing|where are we at|what's the situation|run me through|catch me up)/i;
+
 </script>
 
 <!-- Rex AI Button -->
@@ -22425,7 +22606,7 @@ function rexExecuteCompleteTask(action){
   </div>
 
   <!-- Nudge strip (proactive alerts) -->
-  <div id="rex-nudges" style="display:none;flex-shrink:0;border-bottom:0.5px solid var(--b1);max-height:180px;overflow-y:auto"></div>
+  <div id="rex-nudges" style="display:none"></div>
 
   <!-- Chat messages -->
   <div id="rex-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:200px">
