@@ -21046,14 +21046,7 @@ function rexScan(){
 
   // Update badge
   var badge = document.getElementById('rex-nudge-badge');
-  if(badge){
-    if(_rexNudges.length){
-      badge.style.display='flex';
-      badge.textContent=_rexNudges.length;
-    } else {
-      badge.style.display='none';
-    }
-  }
+  if(badge) badge.style.display = 'none'; // Badge hidden — alerts via daily brief
 
   // Update status line
   var sl = document.getElementById('rex-status-line');
@@ -21068,8 +21061,10 @@ function rexScan(){
 }
 
 function rexRenderNudges(){
+  // Nudge strip disabled — Rex delivers alerts via daily brief instead
   var el = document.getElementById('rex-nudges');
-  if(!el)return;
+  if(el) el.style.display = 'none';
+  return;
   if(!_rexNudges.length){el.style.display='none';return;}
   el.style.display='block';
   el.innerHTML='<div style="padding:8px 14px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3)">Needs attention</div>'
@@ -22528,7 +22523,7 @@ function rexGenerateBrief(type, user){
       },
       body: JSON.stringify({
         contents: [{role:'user', parts:[{text: prompt}]}],
-        generationConfig: {temperature: 0.4, maxOutputTokens: 800}
+        generationConfig: {temperature: 0.4, maxOutputTokens: 1200}
       })
     })
     .then(function(r){return r.json();})
