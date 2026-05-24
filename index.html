@@ -2210,7 +2210,7 @@ function rDash(){
 
   }
   // Div Con condensed - rows: {cand, client, date, hrs, pay, charge, margin, cons}
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   var dcEl=document.getElementById('dv-dc-last');
   if(dcEl){
     if(!_dcReports.length){
@@ -2251,7 +2251,7 @@ function rDashTrendChart(){
     });});
     shiftData.push({wk:wk,shifts:tot});
   }
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   var dcByWk={};
   _dcReports.forEach(function(r){
     var total=r.rows.reduce(function(s,row){return s+row.margin;},0);
@@ -9699,7 +9699,6 @@ function loadTasks(callback){
           assignedTo:assigned,createdBy:r.created_by||'',
           forwardHistory:r.forward_history||[]};
       });
-      try{localStorage.setItem('dw_tasks',JSON.stringify(_tasks));}catch(e){}
       console.log('Loaded '+_tasks.length+' tasks from Supabase');
     updateTabTitle();
     // Start real-time subscriptions for all high-value tables
@@ -9711,9 +9710,7 @@ function loadTasks(callback){
   });
 }
 
-function saveTasks(){
-  try{localStorage.setItem('dw_tasks',JSON.stringify(_tasks));}catch(e){}
-}
+function saveTasks(){} // no-op: tasks saved individually via saveTaskEntry to Supabase
 
 function saveRecurring(){
   try{localStorage.setItem('dw_recurring',JSON.stringify(_recurring));}catch(e){}
@@ -10620,7 +10617,7 @@ function loadDocs(callback){
   });
 }
 
-function saveDocs(){try{localStorage.setItem('dw_docs',JSON.stringify(_docs));}catch(e){}}
+function saveDocs(){} // no-op: documents saved individually via saveDocToSupabase
 
 function saveDocToSupabase(doc,callback){
   var body={id:doc.id,name:doc.name,type:doc.type,tag:doc.tag||'Other',
@@ -10981,13 +10978,12 @@ function loadPQ(callback){
         latestUpdate:r.latest_update||'',nextActionFor:r.next_action_for||'',
         status:r.status||'open',agent:r.agent||'',created:r.created_date||''};
     });
-    try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}
     console.log('Loaded '+_pq.length+' pay queries from Supabase');
     if(callback)callback();
   });
 }
 
-function savePQ(){try{localStorage.setItem('dw_pq',JSON.stringify(_pq));}catch(e){}}
+function savePQ(){} // no-op: pay queries saved individually via savePQEntry to Supabase
 
 function savePQEntry(q,callback){
   console.log('savePQEntry called, id='+q.id);
@@ -11606,10 +11602,9 @@ var _dcFilter={q:'',client:'',showNeg:false};
 
 
 
-function loadDC(){try{var d=localStorage.getItem('dw_divcon');if(d)_dcReports=JSON.parse(d);}catch(e){}}
+function loadDC(){} // localStorage disabled — use loadDCFromSupabase()
 function saveDC(){
-  // Save to localStorage as backup
-  try{localStorage.setItem('dw_divcon',JSON.stringify(_dcReports));}catch(e){}
+  // Save to Supabase only — localStorage removed
   // Save to Supabase - upsert each report by week_label
   _dcReports.forEach(function(rep){
     supaFetch('POST','divcon_reports','on_conflict=week_label',{
@@ -11628,8 +11623,7 @@ function loadDCFromSupabase(callback){
     _dcReports=data.map(function(r){
       return{weekLabel:r.week_label,imported:r.imported,rows:JSON.parse(r.rows||'[]')};
     });
-    // Also persist to localStorage
-    try{localStorage.setItem('dw_divcon',JSON.stringify(_dcReports));}catch(e){}
+    // localStorage write removed — Supabase is source of truth
     console.log('Loaded',_dcReports.length,'div con reports from Supabase');
     if(callback)callback();
   });
@@ -11643,7 +11637,6 @@ function deleteDCFromSupabase(weekLabel){
 function rDivCon(){
   if(!_dcLoaded){
     _dcLoaded=true;
-    loadDC(); // load from localStorage immediately so UI isn't blank
     loadDCFromSupabase(function(){rDivCon();});
     return;
   }
@@ -11968,7 +11961,7 @@ function loadDCMap(){try{var d=localStorage.getItem('dw_dcmap');if(d)_dcMap=JSON
 function saveDCMap(){try{localStorage.setItem('dw_dcmap',JSON.stringify(_dcMap));}catch(e){}}
 
 function dcShowMapping(){
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
   loadDCMap();
   // Collect all unique client names across all reports
   var allClients={};
@@ -12086,7 +12079,7 @@ function loadPipe(callback){
   });
 }
 
-function savePipe(){try{localStorage.setItem('dw_pipeline',JSON.stringify(_pipe));}catch(e){}}
+function savePipe(){} // no-op: pipeline saved individually via savePipeEntry to Supabase
 
 function savePipeEntry(p,callback){
   var body={id:p.id,name:p.name,role:p.role||'',sub_spec:p.subSpec||'',
@@ -13826,7 +13819,7 @@ function tsmSubmit(){
 function showCandHistory(idx){
   var candName=(C[idx]&&C[idx].n)||'Candidate';
   var ex=document.getElementById('cand-history-modal');if(ex)ex.remove();
-  if(!_dcLoaded){loadDC();_dcLoaded=true;}
+  if(!_dcLoaded){_dcLoaded=true;loadDCFromSupabase(function(){});}
 
   var MONTHS3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var DAYS3=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -20210,7 +20203,7 @@ function schedCurrentBlock(day){
 var _schedNotes={},_schedNotesLoaded=false;
 function schedNotesLoad(cb){
   if(!_currentUser)return;
-  supaGet('schedule_notes','user_id=eq.'+_currentUser.id+'&select=day_index,block_index,note',function(rows){
+  supaFetch('GET','schedule_notes','user_id=eq.'+_currentUser.id+'&select=day_index,block_index,note',null,function(err,rows){
     _schedNotes={};(rows||[]).forEach(function(r){_schedNotes[r.day_index+':'+r.block_index]=r.note||'';});
     _schedNotesLoaded=true;if(cb)cb();
   });
@@ -21555,7 +21548,7 @@ function rexCandidateList(){
 }
 
 function rexCallGemini(userMessage){
-  var ctx = rexBuildContext();
+  var ctx = rexBuildContextForIntent(userMessage);
   var memCtx = rexMemoryContext();
   var ruleCtx = _rexMemories.filter(function(m){return m.category==="rule";}).map(function(m){return "- "+m.value;}).join("\n");
   var candList = rexCandidateList();
@@ -21761,6 +21754,8 @@ function rexShowApprovalCard(action){
 
 function rexExecuteAction(action){
   var type = action.type;
+  // Audit log every action
+  rexAuditLog(type, action.fields || action, true, 'pending');
 
   if(type === 'add_shift'){
     rexExecuteAddShift(action);
@@ -21773,6 +21768,7 @@ function rexExecuteAction(action){
   } else if(type === 'complete_task'){
     rexExecuteCompleteTask(action);
   } else {
+    rexAuditLog(type, action.fields || action, true, 'unknown_action_type');
     rexAddMessage('rex', 'I don\'t know how to execute that action yet. Please speak to Josh to sort this.');
   }
 }
@@ -22574,6 +22570,286 @@ function rexTriggerManualBrief(){
 
 // Detect manual brief requests in rexSend
 var _briefTriggerPhrases = /^(brief me|give me (an? )?(brief|update|summary)|what needs doing|morning brief|afternoon brief|how are we doing|where are we at|what's the situation|run me through|catch me up)/i;
+
+// ── REX AI AUDIT LOG ─────────────────────────────────────────────────────────
+function rexAuditLog(actionType, fields, approved, outcome){
+  var user = (_currentUser && _currentUser.name) ? _currentUser.name : 'unknown';
+  var entry = {
+    user_name: user,
+    action_type: actionType,
+    fields: JSON.stringify(fields || {}),
+    approved: approved !== false,
+    outcome: outcome || 'executed',
+    context_summary: 'Rex action via Atlas',
+    created_at: new Date().toISOString()
+  };
+  supaFetch('POST', 'rex_audit_log', '', entry, function(err){
+    if(err) console.warn('Rex audit log failed:', err.message || err);
+  });
+}
+
+// ── REX CONTEXT ROUTING ───────────────────────────────────────────────────────
+
+// Classify user intent from message text
+function rexClassifyIntent(msg) {
+  var m = msg.toLowerCase();
+
+  // Financial signals
+  if (/div.?con|margin|charge|pay.?not.?charg|negative|paid.?not|invoice|money|revenue|earn|profit|loss|finance|financial|week\s*\d|wk\d|lp |live.?place|what.?owe|outstanding|rates?/.test(m))
+    return 'financial';
+
+  // Candidate signals
+  if (/candid|worker|nurse|odp|scrub|anaes|recov|avail|book|pattern|reliab|who.?is|who.?can|roseline|edward|melody|augustina|evelyn|phillip|florah|lydie|shauna|josefina|yvon|bimbola|librada|nicolas|willard|meltrin|paula|silvestre/.test(m))
+    return 'candidates';
+
+  // Cascade/booking signals
+  if (/shift|cascad|vacan|urgent|fill|book|hospital|trust|homerton|ramsay|nuffield|royal.?free|surrey|bedford|hampshire|tomorrow|today.?shift|cover/.test(m))
+    return 'cascade';
+
+  // Task signals
+  if (/task|to.?do|reminder|due|overdue|complet|done|rachel|jason|josh.*do|schedule|calendar/.test(m))
+    return 'tasks';
+
+  // Pipeline/leads signals
+  if (/pipeline|lead|nhs.?lead|registr|compliance|onboard|new.?cand|sign.?off/.test(m))
+    return 'pipeline';
+
+  return 'general';
+}
+
+// Base context — always included, minimal
+function rexBaseContext(myName, todayStr, tomorrowStr) {
+  var cascadeSummary = {
+    vacant: _cascadeShifts.filter(function(s){return s.status==='open';}).length,
+    urgentToday: _cascadeShifts.filter(function(s){return s.status==='open'&&(s.isoDate||'').slice(0,10)===todayStr;}).length,
+    urgentTomorrow: _cascadeShifts.filter(function(s){return s.status==='open'&&(s.isoDate||'').slice(0,10)===tomorrowStr;}).length,
+    submitted: _cascadeShifts.filter(function(s){return s.cascade_status==='submitted';}).length,
+    booked: _cascadeShifts.filter(function(s){return s.cascade_status==='booked';}).length,
+    confirmed: _cascadeShifts.filter(function(s){return s.cascade_status==='confirmed';}).length
+  };
+  var myTasks = _tasks.filter(function(t){return !t.done&&(!myName||!t.consultant||t.consultant===myName);});
+  var overdue = myTasks.filter(function(t){return t.due&&t.due<todayStr;}).length;
+  var ctx = 'USER: '+(myName||'Consultant')+'\n';
+  ctx += 'TODAY: '+todayStr+'\n\n';
+  ctx += 'DESK STATUS:\n';
+  ctx += '- Vacant shifts: '+cascadeSummary.vacant+' ('+cascadeSummary.urgentToday+' today, '+cascadeSummary.urgentTomorrow+' tomorrow)\n';
+  ctx += '- Submitted: '+cascadeSummary.submitted+' | Booked: '+cascadeSummary.booked+' | Confirmed: '+cascadeSummary.confirmed+'\n';
+  ctx += '- Open tasks: '+myTasks.length+' ('+overdue+' overdue)\n\n';
+  return ctx;
+}
+
+// Financial context
+function rexFinancialContext() {
+  var ctx = '';
+  if(typeof _dcReports === 'undefined' || !_dcReports.length) return ctx;
+  var sorted = _dcReports.slice().sort(function(a,b){return (b.weekLabel||'').localeCompare(a.weekLabel||'');});
+  var latest = sorted[0], prev = sorted[1];
+
+  if(latest && latest.rows){
+    var rows = latest.rows;
+    var mg = rows.reduce(function(s,r){return s+(r.margin||0);},0);
+    var ch = rows.reduce(function(s,r){return s+(r.charge||0);},0);
+    var py = rows.reduce(function(s,r){return s+(r.pay||0);},0);
+    var hrs = rows.reduce(function(s,r){return s+(r.hrs||0);},0);
+    var neg = rows.filter(function(r){return (r.margin||0)<0;});
+    var pnc = rows.filter(function(r){return (r.pay||0)>0&&(r.charge||0)===0;});
+    var low = rows.filter(function(r){var c=r.charge||0,m=r.margin||0;return c>0&&m>=0&&(m/c)<0.10;});
+
+    ctx += 'DIV CON — LATEST ('+latest.weekLabel+'):\n';
+    ctx += '- Margin: £'+Math.round(mg).toLocaleString()+' ('+(ch>0?Math.round((mg/ch)*100)+'%':'N/A')+') | Charge: £'+Math.round(ch).toLocaleString()+' | Pay: £'+Math.round(py).toLocaleString()+' | '+Math.round(hrs)+'h | '+rows.length+' rows\n';
+    if(neg.length) ctx += '- NEGATIVE MARGIN ('+neg.length+'): '+neg.map(function(r){return(r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' £'+Math.round(r.margin||0)+'(pay£'+Math.round(r.pay||0)+',chg£'+Math.round(r.charge||0)+')';}).join(' | ')+'\n';
+    if(pnc.length) ctx += '- PAID NOT CHARGED ('+pnc.length+'): '+pnc.map(function(r){return(r.cand||'?')+' @ '+(r.client||'?')+' '+r.date+' pay£'+Math.round(r.pay||0);}).join(' | ')+'\n';
+    if(low.length) ctx += '- LOW MARGIN <10% ('+low.length+'): '+low.slice(0,5).map(function(r){var p=r.charge>0?Math.round((r.margin/r.charge)*100):0;return(r.cand||'?')+' '+p+'%';}).join(' | ')+'\n';
+    if(prev&&prev.rows){var pm=prev.rows.reduce(function(s,r){return s+(r.margin||0);},0);ctx+='- vs '+prev.weekLabel+': £'+Math.round(pm).toLocaleString()+' → £'+Math.round(mg).toLocaleString()+' ('+(mg>=pm?'+':'')+Math.round(mg-pm).toLocaleString()+')\n';}
+    ctx += '\n';
+  }
+
+  // All weeks summary
+  ctx += 'DIV CON ALL WEEKS ('+sorted.length+' weeks):\n';
+  sorted.forEach(function(rep){
+    var rows=rep.rows||[];
+    var mg=rows.reduce(function(s,r){return s+(r.margin||0);},0);
+    var ch=rows.reduce(function(s,r){return s+(r.charge||0);},0);
+    var neg=rows.filter(function(r){return(r.margin||0)<0;}).length;
+    var pnc=rows.filter(function(r){return(r.pay||0)>0&&(r.charge||0)===0;}).length;
+    ctx+=rep.weekLabel+': £'+Math.round(mg).toLocaleString()+' ('+(ch>0?Math.round((mg/ch)*100)+'%':'?')+') '+rows.length+' rows'+(neg?' '+neg+'neg':'')+( pnc?' '+pnc+'pnc':'')+'\n';
+  });
+  ctx += '\n';
+
+  // Cross-ref: neg and PNC by candidate across all weeks
+  var negByCand={}, pncByCand={};
+  sorted.forEach(function(rep){
+    (rep.rows||[]).forEach(function(r){
+      if((r.margin||0)<0){var k=r.cand||'?';if(!negByCand[k])negByCand[k]=[];negByCand[k].push({week:rep.weekLabel,client:r.client||'?',date:r.date||'?',margin:r.margin||0,pay:r.pay||0,charge:r.charge||0,hrs:r.hrs||0});}
+      if((r.pay||0)>0&&(r.charge||0)===0){var k=r.cand||'?';if(!pncByCand[k])pncByCand[k]=[];pncByCand[k].push({week:rep.weekLabel,client:r.client||'?',date:r.date||'?',pay:r.pay||0});}
+    });
+  });
+  var negCands=Object.keys(negByCand);
+  if(negCands.length){
+    ctx+='NEGATIVE MARGIN BY CANDIDATE (ALL WEEKS):\n';
+    negCands.forEach(function(c){var e=negByCand[c];ctx+=c+' ('+e.length+'x): '+e.map(function(x){return x.week+' '+x.client+' £'+Math.round(x.margin);}).join(' | ')+'\n';});
+    ctx+='\n';
+  }
+  var pncCands=Object.keys(pncByCand);
+  if(pncCands.length){
+    ctx+='PAID NOT CHARGED BY CANDIDATE (ALL WEEKS):\n';
+    pncCands.forEach(function(c){var e=pncByCand[c];var tot=e.reduce(function(s,x){return s+x.pay;},0);ctx+=c+' — '+e.length+' rows, £'+Math.round(tot).toLocaleString()+' total: '+e.map(function(x){return x.week+' '+x.client+' £'+Math.round(x.pay);}).join(' | ')+'\n';});
+    ctx+='\n';
+  }
+
+  // Live placement
+  if(typeof getAllLP==='function'){
+    var allLp=getAllLP();
+    var today=new Date(),yr=today.getMonth()>=3?today.getFullYear():today.getFullYear()-1;
+    var apr=new Date(yr,3,1),fyMon=new Date(apr);fyMon.setDate(apr.getDate()-((apr.getDay()+6)%7));
+    var fw=Math.floor((today-fyMon)/(7*864e5))+1,wkMon=new Date(fyMon.getTime()+(fw-1)*7*864e5),wkSun=new Date(wkMon.getTime()+6*864e5);
+    var fmt=function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+    var wkLp=allLp.filter(function(r){var d=r[9]||r[3]||'';return d&&d>=fmt(wkMon)&&d<=fmt(wkSun);});
+    if(wkLp.length){
+      ctx+='LIVE PLACEMENT THIS WEEK: '+wkLp.length+' shifts | '+new Set(wkLp.map(function(r){return r[1]||'';})).size+' candidates | charge £'+Math.round(wkLp.reduce(function(s,r){return s+(parseFloat(r[7])||0);},0)).toLocaleString()+' | margin £'+Math.round(wkLp.reduce(function(s,r){return s+(parseFloat(r[8])||0);},0)).toLocaleString()+'\n\n';
+    }
+  }
+  return ctx;
+}
+
+// Candidate context
+function rexCandidateContext(todayStr, myName) {
+  var ctx = '';
+  // Shift count this week
+  var scWk = wKey(wkOff);
+  var scData = sd[scWk]||{};
+  var DAYNAMES=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var scLines=[];
+  Object.keys(scData).forEach(function(ri){
+    var cand=C[parseInt(ri)];if(!cand||!cand.n)return;
+    var days=scData[ri];var entries=[];
+    Object.keys(days).forEach(function(di){var v=days[di];if(v&&v!=='A'&&v!=='U'&&v!=='T')entries.push(DAYNAMES[parseInt(di)]+':'+v);});
+    if(entries.length)scLines.push(cand.n+' — '+entries.join(', '));
+  });
+  if(scLines.length){ctx+='SHIFT COUNT THIS WEEK:\n';scLines.forEach(function(l){ctx+='- '+l+'\n';});ctx+='\n';}
+
+  // Candidate patterns
+  if(typeof _rexCandPatterns!=='undefined'&&_rexCandPatterns){
+    var cpKeys=Object.keys(_rexCandPatterns);
+    if(cpKeys.length){
+      ctx+='CANDIDATE PATTERNS (last 8 weeks):\n';
+      cpKeys.forEach(function(ri){
+        var p=_rexCandPatterns[ri];
+        var topH=Object.keys(p.usualHospitals).sort(function(a,b){return p.usualHospitals[b]-p.usualHospitals[a];}).slice(0,3).map(function(h){return h+'('+p.usualHospitals[h]+'d)';}).join(', ');
+        var rec=p.weeklyData.slice(-3).map(function(w){return w.wk.slice(5)+':'+(w.days>0?w.days+'d':'-');}).join(' ');
+        ctx+=p.name+' ('+p.spec+'): avg '+Math.round(p.avgDays*10)/10+' d/wk | '+topH+' | '+rec+'\n';
+      });
+      ctx+='\n';
+    }
+  }
+
+  // Available candidates
+  var avail=[];
+  var sdWk=sd[wKey(wkOff)]||{};
+  C.forEach(function(c,ri){
+    if(!c||!c.n||c.ac==='Inactive')return;
+    var dd=sdWk[ri]||{};
+    var hasA=Object.values(dd).some(function(v){return(v||'').toUpperCase()==='A';});
+    var hasB=Object.values(dd).some(function(v){return v&&v!=='A'&&v!=='U'&&v!=='T';});
+    if(hasA&&!hasB)avail.push(c.n+(c.s?' ('+c.s+')':''));
+  });
+  if(avail.length)ctx+='AVAILABLE THIS WEEK (not booked): '+avail.slice(0,15).join(', ')+'\n\n';
+  return ctx;
+}
+
+// Cascade context
+function rexCascadeContext(todayStr, tomorrowStr) {
+  var ctx = '';
+  var urgent = _cascadeShifts.filter(function(s){return s.status==='open'&&((s.isoDate||'').slice(0,10)<=tomorrowStr);});
+  if(urgent.length){
+    ctx+='URGENT VACANT SHIFTS:\n';
+    urgent.forEach(function(s){ctx+='- '+s.hospital+' | '+s.role+' | '+(s.isoDate||'').slice(0,10)+' | '+(s.timeStart||'?')+'-'+(s.timeEnd||'?')+'\n';});
+    ctx+='\n';
+  }
+  // Available candidates for cascade
+  var avail=C.filter(function(c){return c&&c.n&&c.ac!=='Inactive';}).map(function(c){return c.n+(c.s?' ('+c.s+')':'');});
+  ctx+='ACTIVE CANDIDATES FOR BOOKING ('+avail.length+'): '+avail.slice(0,30).join(', ')+'\n\n';
+  return ctx;
+}
+
+// Task context
+function rexTaskContext(todayStr, myName) {
+  var ctx = '';
+  var myTasks=_tasks.filter(function(t){return !t.done&&(!myName||!t.consultant||t.consultant===myName);});
+  var overdue=myTasks.filter(function(t){return t.due&&t.due<todayStr;});
+  if(myTasks.length){
+    ctx+='OPEN TASKS ('+myTasks.length+' total, '+overdue.length+' overdue):\n';
+    myTasks.slice(0,15).forEach(function(t){
+      var isOD=t.due&&t.due<todayStr;
+      ctx+='- ['+t.consultant+'] '+(t.note||t.type||'Task')+(t.due?' [due '+t.due+']':'')+(isOD?' ⚠ OVERDUE':'')+'\n';
+    });
+    ctx+='\n';
+  }
+  return ctx;
+}
+
+// NHS leads context
+function rexLeadsContext() {
+  var ctx = '';
+  if(typeof _nlLeads==='undefined'||!_nlLeads.length) return ctx;
+  var nlNew=_nlLeads.filter(function(l){return l.status==='new';});
+  var nlCont=_nlLeads.filter(function(l){return l.status==='contacted';}).length;
+  var nlConv=_nlLeads.filter(function(l){return l.status==='converted';}).length;
+  var wkAgo=new Date();wkAgo.setDate(wkAgo.getDate()-7);
+  var wkAgoStr=wkAgo.toISOString().slice(0,10);
+  var thisWk=_nlLeads.filter(function(l){return(l.created_at||'').slice(0,10)>=wkAgoStr;});
+  ctx+='NHS LEADS: '+_nlLeads.length+' total | '+nlNew.length+' new | '+nlCont+' contacted | '+nlConv+' converted | '+thisWk.length+' this week\n';
+  if(nlNew.length){ctx+='NEW LEADS: '+nlNew.slice(0,5).map(function(l){return(l.name||l.title||'?')+' '+(l.trust||'');}).join(' | ')+'\n';}
+  ctx+='\n';
+  return ctx;
+}
+
+// Main context builder — now routes by intent
+function rexBuildContextForIntent(userMessage) {
+  var now = new Date();
+  var todayStr = now.toISOString().slice(0,10);
+  var tomorrowD = new Date(now); tomorrowD.setDate(now.getDate()+1);
+  var tomorrowStr = tomorrowD.toISOString().slice(0,10);
+  var myName = (_currentUser&&_currentUser.name)||'';
+  var intent = rexClassifyIntent(userMessage || '');
+
+  var ctx = rexBaseContext(myName, todayStr, tomorrowStr);
+  ctx += '(Context loaded for: '+intent+')\n\n';
+
+  if(intent === 'financial'){
+    ctx += rexFinancialContext();
+  } else if(intent === 'candidates'){
+    ctx += rexCandidateContext(todayStr, myName);
+    ctx += rexTaskContext(todayStr, myName); // tasks often relate to candidates
+  } else if(intent === 'cascade'){
+    ctx += rexCascadeContext(todayStr, tomorrowStr);
+    ctx += rexCandidateContext(todayStr, myName);
+  } else if(intent === 'tasks'){
+    ctx += rexTaskContext(todayStr, myName);
+  } else if(intent === 'pipeline'){
+    ctx += rexLeadsContext();
+    ctx += rexTaskContext(todayStr, myName);
+  } else {
+    // general — desk overview only, no deep dives
+    ctx += rexTaskContext(todayStr, myName);
+    ctx += rexCascadeContext(todayStr, tomorrowStr);
+    // Financial headline only
+    if(typeof _dcReports!=='undefined'&&_dcReports.length){
+      var s=_dcReports.slice().sort(function(a,b){return(b.weekLabel||'').localeCompare(a.weekLabel||'');});
+      var lat=s[0];if(lat&&lat.rows){
+        var mg=lat.rows.reduce(function(x,r){return x+(r.margin||0);},0);
+        var ch=lat.rows.reduce(function(x,r){return x+(r.charge||0);},0);
+        var neg=lat.rows.filter(function(r){return(r.margin||0)<0;}).length;
+        var pnc=lat.rows.filter(function(r){return(r.pay||0)>0&&(r.charge||0)===0;}).length;
+        ctx+='DIV CON HEADLINE ('+lat.weekLabel+'): £'+Math.round(mg).toLocaleString()+' margin ('+(ch>0?Math.round((mg/ch)*100)+'%':'?')+')';
+        if(neg)ctx+=' | '+neg+' neg margin';
+        if(pnc)ctx+=' | '+pnc+' paid-not-charged';
+        ctx+='\n\n';
+      }
+    }
+  }
+  return ctx;
+}
 
 </script>
 
